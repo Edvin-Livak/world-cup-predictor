@@ -17,26 +17,20 @@ import androidx.compose.ui.unit.dp
 import com.sned.worldcuppredictor.ui.theme.WorldCupPredictorTheme
 import com.sned.worldcuppredictor.model.Match
 import com.sned.worldcuppredictor.model.Prediction
+import com.sned.worldcuppredictor.model.UserScore
 import com.sned.worldcuppredictor.data.mockMatches
+import com.sned.worldcuppredictor.model.MatchStatus
+import com.sned.worldcuppredictor.scoring.calculatePoints
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.rememberCoroutineScope
+import com.sned.worldcuppredictor.storage.PredictionStorage
+import kotlinx.coroutines.launch
+import com.sned.worldcuppredictor.api.MatchResultService
 
-fun calculatePoints(match: Match, prediction: Prediction): Int {
-    if (match.actualHomeGoals == null || match.actualAwayGoals == null) return 0
-
-    val predictedWinner = prediction.homeGoals.compareTo(prediction.awayGoals)
-    val actualWinner = match.actualHomeGoals.compareTo(match.actualAwayGoals)
-
-    var points = 0
-
-    if (predictedWinner == actualWinner) points += 1
-
-    if (
-        prediction.homeGoals == match.actualHomeGoals &&
-        prediction.awayGoals == match.actualAwayGoals
-    ) {
-        points += 3
-    }
-
-    return points
+enum class AppTab {
+    Predictions,
+    Leaderboard,
+    Profile
 }
 
 class MainActivity : ComponentActivity() {
@@ -53,26 +47,56 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun WorldCupPredictorApp() {
-    var userName by remember { mutableStateOf("") }
-    var hasJoined by remember { mutableStateOf(false) }
-    var predictions by remember { mutableStateOf<Map<Int, Prediction>>(emptyMap()) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val storage = remember { PredictionStorage(context) }
+    val scope = rememberCoroutineScope()
 
-    if (!hasJoined) {
+    val savedUserName by storage.userNameFlow.collectAsState(initial = "")
+    val savedPredictions by storage.predictionsFlow.collectAsState(initial = emptyMap())
+
+    var userNameInput by remember { mutableStateOf("") }
+    var matches by remember { mutableStateOf(mockMatches) }
+    val resultService = remember { MatchResultService() }
+
+    LaunchedEffect(savedUserName) {
+        if (userNameInput.isBlank()) {
+            userNameInput = savedUserName
+        }
+    }
+
+    if (savedUserName.isBlank()) {
         NameScreen(
-            userName = userName,
-            onNameChange = { userName = it },
+            userName = userNameInput,
+            onNameChange = { userNameInput = it },
             onJoin = {
-                if (userName.isNotBlank()) {
-                    hasJoined = true
+                if (userNameInput.isNotBlank()) {
+                    scope.launch {
+                        storage.saveUserName(userNameInput)
+                    }
                 }
             }
         )
     } else {
         MainScreen(
-            userName = userName,
-            predictions = predictions,
+            userName = savedUserName,
+            matches = matches,
+            predictions = savedPredictions,
             onPredictionChange = { prediction ->
-                predictions = predictions + (prediction.matchId to prediction)
+                val updatedPredictions = savedPredictions + (prediction.matchId to prediction)
+
+                scope.launch {
+                    storage.savePredictions(updatedPredictions)
+                }
+            },
+            onSimulateResultUpdate = {
+                matches = resultService.fetchLatestMatches(matches)
+            },
+            onResetApp = {
+                matches = mockMatches
+
+                scope.launch {
+                    storage.clearAll()
+                }
             }
         )
     }
@@ -122,45 +146,186 @@ fun NameScreen(
 @Composable
 fun MainScreen(
     userName: String,
+    matches: List<Match>,
     predictions: Map<Int, Prediction>,
-    onPredictionChange: (Prediction) -> Unit
+    onPredictionChange: (Prediction) -> Unit,
+    onSimulateResultUpdate: () -> Unit,
+    onResetApp: () -> Unit
 ) {
-    val totalPoints = mockMatches.sumOf { match ->
+    var selectedTab by remember { mutableStateOf(AppTab.Predictions) }
+    val currentUserPoints = matches.sumOf { match ->
         predictions[match.id]?.let { calculatePoints(match, it) } ?: 0
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Hi, $userName") }
+                title = { Text("World Cup Predictor") }
             )
+        },
+        bottomBar = {
+            NavigationBar {
+                NavigationBarItem(
+                    selected = selectedTab == AppTab.Predictions,
+                    onClick = { selectedTab = AppTab.Predictions },
+                    icon = { Text("⚽") },
+                    label = { Text("Predictions") }
+                )
+
+                NavigationBarItem(
+                    selected = selectedTab == AppTab.Leaderboard,
+                    onClick = { selectedTab = AppTab.Leaderboard },
+                    icon = { Text("🏆") },
+                    label = { Text("Leaderboard") }
+                )
+
+                NavigationBarItem(
+                    selected = selectedTab == AppTab.Profile,
+                    onClick = { selectedTab = AppTab.Profile },
+                    icon = { Text("👤") },
+                    label = { Text("Profile") }
+                )
+            }
         }
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .padding(padding)
-                .padding(16.dp)
+        when (selectedTab) {
+            AppTab.Predictions -> PredictionsScreen(
+                modifier = Modifier.padding(padding),
+                matches = matches,
+                predictions = predictions,
+                onPredictionChange = onPredictionChange,
+                onSimulateResultUpdate = onSimulateResultUpdate
+            )
+
+            AppTab.Leaderboard -> LeaderboardScreen(
+                modifier = Modifier.padding(padding),
+                currentUserName = userName,
+                currentUserPoints = currentUserPoints
+            )
+
+            AppTab.Profile -> ProfileScreen(
+                modifier = Modifier.padding(padding),
+                userName = userName,
+                onResetApp = onResetApp
+            )
+        }
+    }
+}
+
+@Composable
+fun PredictionsScreen(
+    modifier: Modifier = Modifier,
+    matches: List<Match>,
+    predictions: Map<Int, Prediction>,
+    onPredictionChange: (Prediction) -> Unit,
+    onSimulateResultUpdate: () -> Unit,
+
+) {
+    val totalPoints = matches.sumOf { match ->
+        predictions[match.id]?.let { calculatePoints(match, it) } ?: 0
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text("Your points", style = MaterialTheme.typography.titleMedium)
+                Text("$totalPoints", style = MaterialTheme.typography.headlineLarge)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Button(
+            onClick = onSimulateResultUpdate,
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Your points", style = MaterialTheme.typography.titleMedium)
-                    Text("$totalPoints", style = MaterialTheme.typography.headlineLarge)
-                }
+            Text("Simulate result update")
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        LazyColumn(
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            items(matches) { match ->
+                MatchCard(
+                    match = match,
+                    prediction = predictions[match.id],
+                    onPredictionChange = onPredictionChange
+                )
             }
+        }
+    }
+}
 
-            Spacer(modifier = Modifier.height(16.dp))
+@Composable
+fun LeaderboardScreen(
+    modifier: Modifier = Modifier,
+    currentUserName: String,
+    currentUserPoints: Int
+) {
+    val users = listOf(
+        UserScore(currentUserName, currentUserPoints),
+        UserScore("Dad", 6),
+        UserScore("Mom", 4),
+        UserScore("Brother", 2)
+    ).sortedByDescending { it.points }
 
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(24.dp)
+    ) {
+        Text("Leaderboard", style = MaterialTheme.typography.headlineMedium)
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        users.forEachIndexed { index, user ->
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp)
             ) {
-                items(mockMatches) { match ->
-                    MatchCard(
-                        match = match,
-                        prediction = predictions[match.id],
-                        onPredictionChange = onPredictionChange
-                    )
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("${index + 1}. ${user.name}")
+                    Text("${user.points} pts")
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun ProfileScreen(
+    modifier: Modifier = Modifier,
+    userName: String,
+    onResetApp: () -> Unit
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(24.dp)
+    ) {
+        Text("Profile", style = MaterialTheme.typography.headlineMedium)
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text("Name: $userName")
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        OutlinedButton(
+            onClick = onResetApp,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Reset local app data")
         }
     }
 }
@@ -171,6 +336,7 @@ fun MatchCard(
     prediction: Prediction?,
     onPredictionChange: (Prediction) -> Unit
 ) {
+    val isLocked = match.status != MatchStatus.SCHEDULED
     var homeGoalsText by remember(match.id) {
         mutableStateOf(prediction?.homeGoals?.toString() ?: "")
     }
@@ -196,6 +362,8 @@ fun MatchCard(
                 Text("vs")
                 Text("${match.awayFlag} ${match.awayTeam}")
             }
+            Text("Kickoff: ${match.kickoffTime}")
+            Text("Status: ${match.status}")
 
             Spacer(modifier = Modifier.height(12.dp))
 
@@ -203,6 +371,7 @@ fun MatchCard(
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 OutlinedTextField(
+                    enabled = !isLocked,
                     value = homeGoalsText,
                     onValueChange = {
                         homeGoalsText = it.filter { char -> char.isDigit() }
@@ -215,6 +384,7 @@ fun MatchCard(
                 )
 
                 OutlinedTextField(
+                    enabled = !isLocked,
                     value = awayGoalsText,
                     onValueChange = {
                         awayGoalsText = it.filter { char -> char.isDigit() }
@@ -229,11 +399,19 @@ fun MatchCard(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            if (match.actualHomeGoals != null && match.actualAwayGoals != null) {
-                Text("Result: ${match.actualHomeGoals}-${match.actualAwayGoals}")
-                Text("Points: $points")
-            } else {
-                Text("Result not available yet")
+            when (match.status) {
+                MatchStatus.SCHEDULED -> {
+                    Text("Prediction open")
+                }
+
+                MatchStatus.LIVE -> {
+                    Text("Prediction locked — match has started")
+                }
+
+                MatchStatus.FINISHED -> {
+                    Text("Result: ${match.actualHomeGoals}-${match.actualAwayGoals}")
+                    Text("Points: $points")
+                }
             }
         }
     }
