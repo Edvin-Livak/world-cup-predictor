@@ -38,6 +38,17 @@ val mockMatches = listOf(
         status = MatchStatus.FINISHED,
         actualHomeGoals = 3,
         actualAwayGoals = 1
+    ),
+    Match(
+        id = 1,
+        group = "Premier League",
+        homeTeam = "Arsenal",
+        awayTeam = "Wolves",
+        homeFlag = "🏴",
+        awayFlag = "🏴",
+        kickoffTime = "2023",
+        status = MatchStatus.SCHEDULED
     )
+
 )
 

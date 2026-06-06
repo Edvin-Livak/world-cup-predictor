@@ -26,6 +26,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import com.sned.worldcuppredictor.storage.PredictionStorage
 import kotlinx.coroutines.launch
 import com.sned.worldcuppredictor.api.MatchResultService
+import com.sned.worldcuppredictor.BuildConfig
 
 enum class AppTab {
     Predictions,
@@ -89,7 +90,17 @@ fun WorldCupPredictorApp() {
                 }
             },
             onSimulateResultUpdate = {
-                matches = resultService.fetchLatestMatches(matches)
+                android.util.Log.d("API_TEST", "Button clicked")
+
+                scope.launch {
+                    android.util.Log.d("API_TEST", "Coroutine started")
+
+                    matches = resultService.fetchMatchesFromApi(
+                        apiKey = BuildConfig.API_FOOTBALL_KEY
+                    )
+
+                    android.util.Log.d("API_TEST", "Matches updated")
+                }
             },
             onResetApp = {
                 matches = mockMatches
