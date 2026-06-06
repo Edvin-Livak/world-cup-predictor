@@ -27,6 +27,8 @@ import com.sned.worldcuppredictor.storage.PredictionStorage
 import kotlinx.coroutines.launch
 import com.sned.worldcuppredictor.api.MatchResultService
 import com.sned.worldcuppredictor.BuildConfig
+import coil.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
 
 enum class AppTab {
     Predictions,
@@ -58,6 +60,8 @@ fun WorldCupPredictorApp() {
     var userNameInput by remember { mutableStateOf("") }
     var matches by remember { mutableStateOf(mockMatches) }
     val resultService = remember { MatchResultService() }
+    var isLoading by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(savedUserName) {
         if (userNameInput.isBlank()) {
@@ -82,6 +86,8 @@ fun WorldCupPredictorApp() {
             userName = savedUserName,
             matches = matches,
             predictions = savedPredictions,
+            isLoading = isLoading,
+            errorMessage = errorMessage,
             onPredictionChange = { prediction ->
                 val updatedPredictions = savedPredictions + (prediction.matchId to prediction)
 
@@ -90,16 +96,19 @@ fun WorldCupPredictorApp() {
                 }
             },
             onSimulateResultUpdate = {
-                android.util.Log.d("API_TEST", "Button clicked")
-
                 scope.launch {
-                    android.util.Log.d("API_TEST", "Coroutine started")
+                    isLoading = true
+                    errorMessage = null
 
-                    matches = resultService.fetchMatchesFromApi(
-                        apiKey = BuildConfig.API_FOOTBALL_KEY
-                    )
-
-                    android.util.Log.d("API_TEST", "Matches updated")
+                    try {
+                        matches = resultService.fetchMatchesFromApi(
+                            apiKey = BuildConfig.API_FOOTBALL_KEY
+                        )
+                    } catch (e: Exception) {
+                        errorMessage = "Could not update matches. Please try again."
+                    } finally {
+                        isLoading = false
+                    }
                 }
             },
             onResetApp = {
@@ -159,6 +168,8 @@ fun MainScreen(
     userName: String,
     matches: List<Match>,
     predictions: Map<Int, Prediction>,
+    isLoading: Boolean,
+    errorMessage: String?,
     onPredictionChange: (Prediction) -> Unit,
     onSimulateResultUpdate: () -> Unit,
     onResetApp: () -> Unit
@@ -204,6 +215,8 @@ fun MainScreen(
                 modifier = Modifier.padding(padding),
                 matches = matches,
                 predictions = predictions,
+                isLoading = isLoading,
+                errorMessage = errorMessage,
                 onPredictionChange = onPredictionChange,
                 onSimulateResultUpdate = onSimulateResultUpdate
             )
@@ -228,12 +241,27 @@ fun PredictionsScreen(
     modifier: Modifier = Modifier,
     matches: List<Match>,
     predictions: Map<Int, Prediction>,
+    isLoading: Boolean,
+    errorMessage: String?,
     onPredictionChange: (Prediction) -> Unit,
     onSimulateResultUpdate: () -> Unit,
 
 ) {
     val totalPoints = matches.sumOf { match ->
         predictions[match.id]?.let { calculatePoints(match, it) } ?: 0
+    }
+
+    if (isLoading) {
+        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+        Spacer(modifier = Modifier.height(8.dp))
+    }
+
+    if (errorMessage != null) {
+        Text(
+            text = errorMessage,
+            color = MaterialTheme.colorScheme.error
+        )
+        Spacer(modifier = Modifier.height(8.dp))
     }
 
     Column(
@@ -252,9 +280,10 @@ fun PredictionsScreen(
 
         Button(
             onClick = onSimulateResultUpdate,
+            enabled = !isLoading,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Simulate result update")
+            Text(if (isLoading) "Updating..." else "Check latest results")
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -369,12 +398,22 @@ fun MatchCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("${match.homeFlag} ${match.homeTeam}")
-                Text("vs")
-                Text("${match.awayFlag} ${match.awayTeam}")
+                TeamInfo(
+                    name = match.homeTeam,
+                    flag = match.homeFlag,
+                    logoUrl = match.homeLogoUrl,
+                    modifier = Modifier.weight(1f)
+                )
+
+                Text("vs", modifier = Modifier.padding(horizontal = 8.dp))
+
+                TeamInfo(
+                    name = match.awayTeam,
+                    flag = match.awayFlag,
+                    logoUrl = match.awayLogoUrl,
+                    modifier = Modifier.weight(1f)
+                )
             }
-            Text("Kickoff: ${match.kickoffTime}")
-            Text("Status: ${match.status}")
 
             Spacer(modifier = Modifier.height(12.dp))
 
@@ -425,6 +464,34 @@ fun MatchCard(
                 }
             }
         }
+    }
+}
+
+@Composable
+fun TeamInfo(
+    name: String,
+    flag: String,
+    logoUrl: String?,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier
+    ) {
+        if (!logoUrl.isNullOrBlank()) {
+            AsyncImage(
+                model = logoUrl,
+                contentDescription = name,
+                modifier = Modifier.size(28.dp),
+                contentScale = ContentScale.Fit
+            )
+        } else {
+            Text(flag)
+        }
+
+        Spacer(modifier = Modifier.width(8.dp))
+
+        Text(name)
     }
 }
 

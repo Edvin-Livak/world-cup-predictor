@@ -39,7 +39,8 @@ data class ApiFootballTeams(
 )
 
 data class ApiFootballTeam(
-    val name: String
+    val name: String,
+    val logo: String?
 )
 
 data class ApiFootballGoals(

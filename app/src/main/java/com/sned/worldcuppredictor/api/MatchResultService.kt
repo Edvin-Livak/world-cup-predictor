@@ -60,7 +60,9 @@ class MatchResultService {
                 kickoffTime = item.fixture.date,
                 status = mapStatus(item.fixture.status.short),
                 actualHomeGoals = item.goals.home,
-                actualAwayGoals = item.goals.away
+                actualAwayGoals = item.goals.away,
+                homeLogoUrl = item.teams.home.logo,
+                awayLogoUrl = item.teams.away.logo,
             )
         }
     }
