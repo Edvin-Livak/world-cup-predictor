@@ -5,11 +5,10 @@ import retrofit2.http.Header
 import retrofit2.http.Query
 
 interface ApiFootballApi {
-    @GET("fixtures")
+    @GET("competitions/WC/matches/")
     suspend fun getWorldCupFixtures(
-        @Header("x-apisports-key") apiKey: String,
-        @Query("league") league: Int = 39,
-        @Query("season") season: Int = 2023
+        @Header("X-Auth-Token") apiKey: String,
+        @Query("season") season: Int = 2026
     ): ApiFootballResponse
 }
 
@@ -19,6 +18,7 @@ data class ApiFootballResponse(
 
 data class ApiFootballFixtureItem(
     val fixture: ApiFootballFixture,
+    val league: ApiFootballLeague,
     val teams: ApiFootballTeams,
     val goals: ApiFootballGoals
 )
@@ -26,7 +26,13 @@ data class ApiFootballFixtureItem(
 data class ApiFootballFixture(
     val id: Int,
     val date: String,
-    val status: ApiFootballStatus
+    val status: ApiFootballStatus,
+    val venue: ApiFootballVenue?
+)
+
+data class ApiFootballVenue(
+    val name: String?,
+    val city: String?
 )
 
 data class ApiFootballStatus(
@@ -46,4 +52,8 @@ data class ApiFootballTeam(
 data class ApiFootballGoals(
     val home: Int?,
     val away: Int?
+)
+
+data class ApiFootballLeague(
+    val round: String?
 )

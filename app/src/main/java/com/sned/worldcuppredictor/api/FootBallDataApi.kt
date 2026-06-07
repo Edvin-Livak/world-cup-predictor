@@ -2,13 +2,13 @@ package com.sned.worldcuppredictor.api
 
 import retrofit2.http.GET
 import retrofit2.http.Header
-import retrofit2.http.Path
+import retrofit2.http.Query
 
 interface FootballDataApi {
-    @GET("competitions/{competitionCode}/matches")
-    suspend fun getMatches(
-        @Path("competitionCode") competitionCode: String,
-        @Header("X-Auth-Token") apiKey: String
+    @GET("competitions/WC/matches/")
+    suspend fun getWorldCupMatches(
+        @Header("X-Auth-Token") apiKey: String,
+        @Query("season") season: Int = 2026
     ): FootballDataResponse
 }
 
@@ -20,14 +20,20 @@ data class FootballDataMatch(
     val id: Int,
     val utcDate: String,
     val status: String,
+    val stage: String?,
+    val group: String?,
     val homeTeam: FootballDataTeam,
     val awayTeam: FootballDataTeam,
-    val score: FootballDataScore
+    val score: FootballDataScore,
+    val matchday: Int?
 )
 
 data class FootballDataTeam(
-    val name: String,
-    val tla: String?
+    val id: Int?,
+    val name: String?,
+    val shortName: String?,
+    val tla: String?,
+    val crest: String?
 )
 
 data class FootballDataScore(

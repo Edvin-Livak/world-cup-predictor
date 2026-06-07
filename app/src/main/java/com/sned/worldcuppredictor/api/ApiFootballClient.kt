@@ -6,7 +6,7 @@ import retrofit2.converter.gson.GsonConverterFactory
 object ApiFootballClient {
     val api: ApiFootballApi by lazy {
         Retrofit.Builder()
-            .baseUrl("https://v3.football.api-sports.io/")
+            .baseUrl("https://api.football-data.org/v4/")
             .addConverterFactory(GsonConverterFactory.create())
             .build()
             .create(ApiFootballApi::class.java)

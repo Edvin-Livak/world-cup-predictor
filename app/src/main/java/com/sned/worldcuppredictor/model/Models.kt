@@ -18,7 +18,9 @@ data class Match(
     val actualHomeGoals: Int? = null,
     val actualAwayGoals: Int? = null,
     val homeLogoUrl: String? = null,
-    val awayLogoUrl: String? = null
+    val awayLogoUrl: String? = null,
+    val venue: String? = null,
+    val matchday: Int? = null
 )
 
 data class Prediction(

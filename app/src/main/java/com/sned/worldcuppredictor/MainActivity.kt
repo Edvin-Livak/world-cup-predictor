@@ -29,6 +29,16 @@ import com.sned.worldcuppredictor.api.MatchResultService
 import com.sned.worldcuppredictor.BuildConfig
 import coil.compose.AsyncImage
 import androidx.compose.ui.layout.ContentScale
+import android.widget.Toast
+import androidx.compose.foundation.lazy.LazyRow
+import coil.ImageLoader
+import coil.compose.AsyncImage
+import coil.decode.SvgDecoder
+import coil.request.ImageRequest
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Surface
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.BorderStroke
 
 enum class AppTab {
     Predictions,
@@ -96,16 +106,22 @@ fun WorldCupPredictorApp() {
                 }
             },
             onSimulateResultUpdate = {
+                Toast.makeText(context, "Checking latest results...", Toast.LENGTH_SHORT).show()
+                android.util.Log.d("API_TEST", "Button clicked")
+
                 scope.launch {
                     isLoading = true
                     errorMessage = null
 
                     try {
+                        android.util.Log.d("API_TEST", "Calling API")
                         matches = resultService.fetchMatchesFromApi(
                             apiKey = BuildConfig.API_FOOTBALL_KEY
                         )
+                        android.util.Log.d("API_TEST", "Loaded ${matches.size} matches")
                     } catch (e: Exception) {
-                        errorMessage = "Could not update matches. Please try again."
+                        android.util.Log.e("API_TEST", "API failed", e)
+                        errorMessage = "Could not update matches: ${e.message}"
                     } finally {
                         isLoading = false
                     }
@@ -247,9 +263,24 @@ fun PredictionsScreen(
     onSimulateResultUpdate: () -> Unit,
 
 ) {
+    val sections = matches
+        .map { it.kickoffTime.take(10) }
+        .distinct()
+        .sorted()
+
+    var selectedSection by remember(sections) {
+        mutableStateOf(sections.firstOrNull())
+    }
+
+    val visibleMatches = matches.filter { match ->
+        match.kickoffTime.take(10) == selectedSection
+    }
+
     val totalPoints = matches.sumOf { match ->
         predictions[match.id]?.let { calculatePoints(match, it) } ?: 0
     }
+
+
 
     if (isLoading) {
         LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
@@ -288,10 +319,24 @@ fun PredictionsScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(sections) { date ->
+                FilterChip(
+                    selected = selectedSection == date,
+                    onClick = { selectedSection = date },
+                    label = { Text(date) }
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
         LazyColumn(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            items(matches) { match ->
+            items(visibleMatches) { match ->
                 MatchCard(
                     match = match,
                     prediction = predictions[match.id],
@@ -387,9 +432,21 @@ fun MatchCard(
 
     val points = prediction?.let { calculatePoints(match, it) } ?: 0
 
-    Card(modifier = Modifier.fillMaxWidth()) {
+    val borderColor = when (match.status) {
+        MatchStatus.SCHEDULED -> Color(0xFF4CAF50) // Green
+        MatchStatus.LIVE -> Color(0xFFF44336)      // Red
+        MatchStatus.FINISHED -> Color.Transparent
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        border = BorderStroke(
+            width = if (match.status == MatchStatus.FINISHED) 0.dp else 2.dp,
+            color = borderColor
+        )
+    ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(match.group, style = MaterialTheme.typography.labelLarge)
+            Text(match.group.substringBefore("_") + " " + match.group.substringAfter("_"), style = MaterialTheme.typography.labelLarge)
 
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -413,6 +470,39 @@ fun MatchCard(
                     logoUrl = match.awayLogoUrl,
                     modifier = Modifier.weight(1f)
                 )
+            }
+
+
+
+            Text(match.kickoffTime.substringBefore("T") + " at " + match.kickoffTime.substringAfter("T").substringBefore(":00Z") + " (UTC)")
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = 8.dp)
+            )
+
+            when (match.status) {
+                MatchStatus.SCHEDULED -> {
+                    Text(
+                        text = "Prediction open",
+                        color = Color(0xFF2E7D32),
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
+
+                MatchStatus.LIVE -> {
+                    Text(
+                        text = "Prediction locked — match has started",
+                        color = Color(0xFFC62828),
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
+
+                MatchStatus.FINISHED -> {
+                    Text("Result: ${match.actualHomeGoals}-${match.actualAwayGoals}")
+                    Text("Points: $points")
+                }
             }
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -449,19 +539,9 @@ fun MatchCard(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            when (match.status) {
-                MatchStatus.SCHEDULED -> {
-                    Text("Prediction open")
-                }
 
-                MatchStatus.LIVE -> {
-                    Text("Prediction locked — match has started")
-                }
-
-                MatchStatus.FINISHED -> {
-                    Text("Result: ${match.actualHomeGoals}-${match.actualAwayGoals}")
-                    Text("Points: $points")
-                }
+            match.venue?.let {
+                Text("Venue: $it")
             }
         }
     }
@@ -474,13 +554,27 @@ fun TeamInfo(
     logoUrl: String?,
     modifier: Modifier = Modifier
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    val imageLoader = remember {
+        ImageLoader.Builder(context)
+            .components {
+                add(SvgDecoder.Factory())
+            }
+            .build()
+    }
+
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
     ) {
         if (!logoUrl.isNullOrBlank()) {
             AsyncImage(
-                model = logoUrl,
+                model = ImageRequest.Builder(context)
+                    .data(logoUrl)
+                    .crossfade(true)
+                    .build(),
+                imageLoader = imageLoader,
                 contentDescription = name,
                 modifier = Modifier.size(28.dp),
                 contentScale = ContentScale.Fit
