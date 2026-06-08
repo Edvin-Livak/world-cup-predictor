@@ -3,6 +3,7 @@ import java.util.Properties
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    id("org.jetbrains.kotlin.plugin.serialization") version "2.0.21"
 }
 
 val localProperties = Properties()
@@ -32,6 +33,18 @@ android {
             "String",
             "API_FOOTBALL_KEY",
             "\"${localProperties.getProperty("API_FOOTBALL_KEY", "")}\""
+        )
+
+        buildConfigField(
+            "String",
+            "SUPABASE_URL",
+            "\"${localProperties.getProperty("SUPABASE_URL", "")}\""
+        )
+
+        buildConfigField(
+            "String",
+            "SUPABASE_PUBLIC_KEY",
+            "\"${localProperties.getProperty("SUPABASE_PUBLIC_KEY", "")}\""
         )
     }
 
@@ -76,4 +89,9 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("io.coil-kt:coil-compose:2.7.0")
     implementation("io.coil-kt:coil-svg:2.7.0")
+    implementation("io.github.jan-tennert.supabase:postgrest-kt:2.5.4")
+    implementation("io.github.jan-tennert.supabase:gotrue-kt:2.5.4")
+    implementation("io.github.jan-tennert.supabase:storage-kt:2.5.4")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.1")
+    implementation("io.ktor:ktor-client-android:2.3.12")
 }

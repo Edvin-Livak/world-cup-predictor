@@ -32,13 +32,17 @@ import androidx.compose.ui.layout.ContentScale
 import android.widget.Toast
 import androidx.compose.foundation.lazy.LazyRow
 import coil.ImageLoader
-import coil.compose.AsyncImage
 import coil.decode.SvgDecoder
 import coil.request.ImageRequest
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.draw.blur
+import com.sned.worldcuppredictor.repository.ProfileRepository
+import com.sned.worldcuppredictor.repository.PredictionRepository
+import kotlin.text.get
+import com.sned.worldcuppredictor.model.MatchPredictionView
 
 enum class AppTab {
     Predictions,
@@ -58,27 +62,125 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WorldCupPredictorApp() {
     val context = androidx.compose.ui.platform.LocalContext.current
     val storage = remember { PredictionStorage(context) }
     val scope = rememberCoroutineScope()
 
-    val savedUserName by storage.userNameFlow.collectAsState(initial = "")
+    val savedUserName by storage.userNameFlow.collectAsState(initial = null)
+    val savedUserId by storage.userIdFlow.collectAsState(initial = null)
     val savedPredictions by storage.predictionsFlow.collectAsState(initial = emptyMap())
     val savedMatches by storage.matchesFlow.collectAsState(initial = emptyList())
 
+    val predictionRepository = remember { PredictionRepository() }
+
     var userNameInput by remember { mutableStateOf("") }
-    var matches by remember { mutableStateOf(savedMatches) }
+    var matches by remember { mutableStateOf<List<Match>>(emptyList()) }
     val resultService = remember { MatchResultService() }
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(savedUserName) {
-        if (userNameInput.isBlank()) {
-            userNameInput = savedUserName
+    var profileRepository = remember { ProfileRepository() }
+    var loginError by remember { mutableStateOf<String?>(null) }
+    var isCreatingProfile by remember { mutableStateOf(false) }
+
+    var leaderboardUsers by remember { mutableStateOf<List<UserScore>>(emptyList()) }
+    var selectedMatch by remember { mutableStateOf<Match?>(null) }
+    var selectedMatchPredictions by remember { mutableStateOf<List<MatchPredictionView>>(emptyList()) }
+
+    var pinInput by remember { mutableStateOf("") }
+
+    fun refreshLeaderboard() {
+        scope.launch {
+            try {
+                val profiles = profileRepository.getAllProfiles()
+                val onlinePredictions = predictionRepository.getAllPredictions()
+
+                leaderboardUsers = profiles.map { profile ->
+                    val userPredictions = onlinePredictions
+                        .filter { it.userId == profile.id }
+                        .associate {
+                            it.matchId to Prediction(
+                                matchId = it.matchId,
+                                homeGoals = it.homeGoals,
+                                awayGoals = it.awayGoals
+                            )
+                        }
+
+                    val points = matches.sumOf { match ->
+                        userPredictions[match.id]?.let { prediction ->
+                            calculatePoints(match, prediction)
+                        } ?: 0
+                    }
+
+                    UserScore(
+                        name = profile.username,
+                        points = points
+                    )
+                }.sortedByDescending { it.points }
+
+            } catch (e: Exception) {
+                android.util.Log.e("SUPABASE_TEST", "Could not refresh leaderboard", e)
+            }
         }
     }
+
+    fun showPredictionsForMatch(match: Match) {
+        scope.launch {
+            val profiles = profileRepository.getAllProfiles()
+            val onlinePredictions = predictionRepository.getAllPredictions()
+
+            selectedMatch = match
+
+            selectedMatchPredictions = profiles.map { profile ->
+                val prediction = onlinePredictions.firstOrNull {
+                    it.userId == profile.id && it.matchId == match.id
+                }
+
+                MatchPredictionView(
+                    username = profile.username,
+                    homeGoals = prediction?.homeGoals,
+                    awayGoals = prediction?.awayGoals
+                )
+            }.sortedBy { it.username }
+        }
+    }
+
+    fun syncPredictionsForCurrentUser(userId: String) {
+        scope.launch {
+            try {
+                val onlinePredictions = predictionRepository.getPredictionsForUser(userId)
+
+                val localPredictions = onlinePredictions.associate {
+                    it.matchId to Prediction(
+                        matchId = it.matchId,
+                        homeGoals = it.homeGoals,
+                        awayGoals = it.awayGoals
+                    )
+                }
+
+                storage.savePredictions(localPredictions)
+            } catch (e: Exception) {
+                android.util.Log.e("SUPABASE_TEST", "Could not sync user predictions", e)
+            }
+        }
+    }
+
+    if (savedUserName == null) {
+        Surface(modifier = Modifier.fillMaxSize()) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator()
+            }
+        }
+        return
+    }
+
+    val currentUserName = savedUserName ?: return
 
     LaunchedEffect(savedMatches) {
         if (matches.isEmpty() && savedMatches.isNotEmpty()) {
@@ -86,8 +188,13 @@ fun WorldCupPredictorApp() {
         }
     }
 
-    LaunchedEffect(savedUserName) {
-        if (savedUserName.isNotBlank() && matches.isEmpty()) {
+    LaunchedEffect(currentUserName) {
+        if (currentUserName.isBlank()) {
+            userNameInput = ""
+            return@LaunchedEffect
+        }
+
+        if (matches.isEmpty()) {
             isLoading = true
             errorMessage = null
 
@@ -107,21 +214,87 @@ fun WorldCupPredictorApp() {
         }
     }
 
-    if (savedUserName.isBlank()) {
+    LaunchedEffect(currentUserName, matches) {
+        if (currentUserName.isNotBlank() && matches.isNotEmpty()) {
+            refreshLeaderboard()
+        }
+    }
+
+    LaunchedEffect(savedUserId) {
+        if (!savedUserId.isNullOrBlank()) {
+            syncPredictionsForCurrentUser(savedUserId!!)
+        }
+    }
+
+    if (currentUserName.isBlank()) {
         NameScreen(
             userName = userNameInput,
-            onNameChange = { userNameInput = it },
+            errorMessage = loginError,
+            isLoading = isCreatingProfile,
+            onNameChange = {
+                userNameInput = it
+                loginError = null
+            },
             onJoin = {
                 if (userNameInput.isNotBlank()) {
                     scope.launch {
-                        storage.saveUserName(userNameInput)
+                        isCreatingProfile = true
+                        loginError = null
+
+                        try {
+                            val username = userNameInput.trim()
+
+                            if (profileRepository.usernameExists(username) || pinInput.length != 4) {
+                                loginError = "Username is already taken or PIN code not 4 numbers long."
+                            } else {
+                                val createdProfile = profileRepository.createProfile(username = username, pin = pinInput)
+
+                                storage.saveUserName(username)
+                                createdProfile.id?.let { storage.saveUserId(it) }
+                            }
+                        } catch (e: Exception) {
+                            android.util.Log.e("SUPABASE_TEST", "Could not create profile", e)
+                            loginError = "Could not create profile. Try again."
+                        } finally {
+                            isCreatingProfile = false
+                        }
                     }
                 }
+            },
+            onLogin = {
+                if (userNameInput.isNotBlank()) {
+                    scope.launch {
+                        isCreatingProfile = true
+                        loginError = null
+                        try {
+                            val username = userNameInput.trim()
+
+                            val profile = profileRepository.verifyLogin(username, pinInput)
+
+                            if (profile != null && profile.id != null) {
+                                storage.saveUserName(profile.username)
+                                storage.saveUserId(profile.id)
+                            } else {
+                                loginError = "Invalid username or PIN."
+                            }
+                        } catch (e: Exception) {
+                            android.util.Log.e("SUPABASE_TGEST", "Could not log in", e)
+                            loginError = "Could not log in. Try again."
+                        } finally {
+                            isCreatingProfile = false
+                        }
+                    }
+                }
+            },
+            pin = pinInput,
+            onPinChange = {
+                pinInput = it
+                loginError = null
             }
         )
     } else {
         MainScreen(
-            userName = savedUserName,
+            userName = currentUserName,
             matches = matches,
             predictions = savedPredictions,
             isLoading = isLoading,
@@ -131,6 +304,16 @@ fun WorldCupPredictorApp() {
 
                 scope.launch {
                     storage.savePredictions(updatedPredictions)
+
+                    savedUserId?.let { userId ->
+                        try {
+                            predictionRepository.savePrediction(userId, prediction)
+                            refreshLeaderboard()
+                        } catch (e: Exception) {
+                            android.util.Log.e("SUPABASE_TEST", "Could not save online prediction", e)
+                        }
+
+                    }
                 }
             },
             onSimulateResultUpdate = {
@@ -164,16 +347,92 @@ fun WorldCupPredictorApp() {
                 scope.launch {
                     storage.clearAll()
                 }
+            },
+            leaderboardUsers = leaderboardUsers,
+            onRefreshLeaderboard = { refreshLeaderboard() },
+            onTestFinishFirstMatch = {
+                val firstMatch = matches.firstOrNull()
+
+                if (firstMatch != null) {
+                    matches = matches.map { match ->
+                        if (match.id == firstMatch.id) {
+                            match.copy(
+                                status = MatchStatus.FINISHED,
+                                actualHomeGoals = 2,
+                                actualAwayGoals = 1
+                            )
+                        } else {
+                            match
+                        }
+                    }
+
+                    scope.launch {
+                        storage.saveMatches(matches)
+                        refreshLeaderboard()
+                    }
+                }
+            },
+            onViewMatchPredictions = { match ->
+                showPredictionsForMatch(match)
+            },
+            onLogOut = {
+                scope.launch {
+                    storage.logout()
+                }
             }
         )
+        selectedMatch?.let { match ->
+            ModalBottomSheet(
+                onDismissRequest = {
+                    selectedMatch = null
+                    selectedMatchPredictions = emptyList()
+                }
+            ) {
+                Column(modifier = Modifier.padding(24.dp)) {
+                    Text(
+                        text = "${match.homeTeam} vs ${match.awayTeam}",
+                        style = MaterialTheme.typography.headlineSmall
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    selectedMatchPredictions.forEach { item ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(item.username)
+
+                            val predictionText =
+                                if (item.homeGoals == null || item.awayGoals == null) {
+                                    "No prediction"
+                                } else {
+                                    "${item.homeGoals} - ${item.awayGoals}"
+                                }
+
+                            Text(predictionText)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+            }
+        }
     }
 }
 
 @Composable
 fun NameScreen(
     userName: String,
+    errorMessage: String?,
+    isLoading: Boolean,
     onNameChange: (String) -> Unit,
-    onJoin: () -> Unit
+    onJoin: () -> Unit,
+    onLogin: () -> Unit,
+    pin: String,
+    onPinChange: (String) -> Unit
 ) {
     Surface(modifier = Modifier.fillMaxSize()) {
         Column(
@@ -197,13 +456,45 @@ fun NameScreen(
                 singleLine = true
             )
 
+            if (errorMessage != null) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = errorMessage,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+
+            OutlinedTextField(
+                value = pin,
+                onValueChange = {
+                    onPinChange(it.filter { c -> c.isDigit() }.take(4))
+                },
+                label = { Text("4-digit PIN") },
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.NumberPassword
+                ),
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+
             Spacer(modifier = Modifier.height(16.dp))
+
+            OutlinedButton(
+                onClick = onLogin,
+                enabled = !isLoading,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(if (isLoading) "Logging in..." else "Log in")
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
 
             Button(
                 onClick = onJoin,
+                enabled = !isLoading,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Start predicting")
+                Text(if (isLoading) "Creating profile..." else "Create New Profile")
             }
         }
     }
@@ -219,7 +510,12 @@ fun MainScreen(
     errorMessage: String?,
     onPredictionChange: (Prediction) -> Unit,
     onSimulateResultUpdate: () -> Unit,
-    onResetApp: () -> Unit
+    onResetApp: () -> Unit,
+    leaderboardUsers: List<UserScore>,
+    onRefreshLeaderboard: () -> Unit,
+    onTestFinishFirstMatch: () -> Unit,
+    onViewMatchPredictions: (Match) -> Unit,
+    onLogOut: () -> Unit
 ) {
     var selectedTab by remember { mutableStateOf(AppTab.Predictions) }
     val currentUserPoints = matches.sumOf { match ->
@@ -265,19 +561,22 @@ fun MainScreen(
                 isLoading = isLoading,
                 errorMessage = errorMessage,
                 onPredictionChange = onPredictionChange,
-                onSimulateResultUpdate = onSimulateResultUpdate
+                onSimulateResultUpdate = onSimulateResultUpdate,
+                onTestFinishFirstMatch = onTestFinishFirstMatch,
+                onViewMatchPredictions = onViewMatchPredictions
             )
 
             AppTab.Leaderboard -> LeaderboardScreen(
                 modifier = Modifier.padding(padding),
-                currentUserName = userName,
-                currentUserPoints = currentUserPoints
+                users = leaderboardUsers,
+                onRefreshLeaderboard = onRefreshLeaderboard
             )
 
             AppTab.Profile -> ProfileScreen(
                 modifier = Modifier.padding(padding),
                 userName = userName,
-                onResetApp = onResetApp
+                onResetApp = onResetApp,
+                onLogOut = onLogOut
             )
         }
     }
@@ -292,7 +591,8 @@ fun PredictionsScreen(
     errorMessage: String?,
     onPredictionChange: (Prediction) -> Unit,
     onSimulateResultUpdate: () -> Unit,
-
+    onTestFinishFirstMatch: () -> Unit,
+    onViewMatchPredictions: (Match) -> Unit
 ) {
     val sections = matches
         .map { it.kickoffTime.take(10) }
@@ -348,6 +648,13 @@ fun PredictionsScreen(
             Text(if (isLoading) "Updating..." else "Check latest results")
         }
 
+        OutlinedButton(
+            onClick = onTestFinishFirstMatch,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Test finish first match 2-1")
+        }
+
         Spacer(modifier = Modifier.height(16.dp))
 
         LazyRow(
@@ -376,7 +683,8 @@ fun PredictionsScreen(
                 MatchCard(
                     match = match,
                     prediction = predictions[match.id],
-                    onPredictionChange = onPredictionChange
+                    onPredictionChange = onPredictionChange,
+                    onViewPredictions = { onViewMatchPredictions(match) }
                 )
             }
         }
@@ -386,16 +694,9 @@ fun PredictionsScreen(
 @Composable
 fun LeaderboardScreen(
     modifier: Modifier = Modifier,
-    currentUserName: String,
-    currentUserPoints: Int
+    users: List<UserScore>,
+    onRefreshLeaderboard: () -> Unit
 ) {
-    val users = listOf(
-        UserScore(currentUserName, currentUserPoints),
-        UserScore("Dad", 6),
-        UserScore("Mom", 4),
-        UserScore("Brother", 2)
-    ).sortedByDescending { it.points }
-
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -405,18 +706,33 @@ fun LeaderboardScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        users.forEachIndexed { index, user ->
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 8.dp)
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
+        Button(
+            onClick = onRefreshLeaderboard,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Refresh leaderboard")
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        if (users.isEmpty()) {
+            Text("No leaderboard data yet.")
+        } else {
+            users.forEachIndexed { index, user ->
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp)
                 ) {
-                    Text("${index + 1}. ${user.name}")
-                    Text("${user.points} pts")
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("${index + 1}. ${user.name}")
+                        Text("${user.points} pts")
+                    }
                 }
             }
         }
@@ -427,7 +743,8 @@ fun LeaderboardScreen(
 fun ProfileScreen(
     modifier: Modifier = Modifier,
     userName: String,
-    onResetApp: () -> Unit
+    onResetApp: () -> Unit,
+    onLogOut: () -> Unit
 ) {
     Column(
         modifier = modifier
@@ -442,6 +759,15 @@ fun ProfileScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
+        Button(
+            onClick = onLogOut,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Log out")
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
         OutlinedButton(
             onClick = onResetApp,
             modifier = Modifier.fillMaxWidth()
@@ -455,14 +781,15 @@ fun ProfileScreen(
 fun MatchCard(
     match: Match,
     prediction: Prediction?,
-    onPredictionChange: (Prediction) -> Unit
+    onPredictionChange: (Prediction) -> Unit,
+    onViewPredictions: () -> Unit
 ) {
     val isLocked = match.status != MatchStatus.SCHEDULED
-    var homeGoalsText by remember(match.id) {
+    var homeGoalsText by remember(match.id, prediction) {
         mutableStateOf(prediction?.homeGoals?.toString() ?: "")
     }
 
-    var awayGoalsText by remember(match.id) {
+    var awayGoalsText by remember(match.id, prediction) {
         mutableStateOf(prediction?.awayGoals?.toString() ?: "")
     }
 
@@ -574,10 +901,13 @@ fun MatchCard(
             }
 
             Spacer(modifier = Modifier.height(8.dp))
-
-
-            match.venue?.let {
-                Text("Venue: $it")
+            if (match.status != MatchStatus.SCHEDULED) {
+                OutlinedButton(
+                    onClick = onViewPredictions,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("View other predictions")
+                }
             }
         }
     }

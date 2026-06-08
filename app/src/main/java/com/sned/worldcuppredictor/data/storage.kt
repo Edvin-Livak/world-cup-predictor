@@ -19,6 +19,8 @@ class PredictionStorage(private val context: Context) {
     private val predictionsKey = stringPreferencesKey("predictions")
 
     private val MATCHES_KEY = stringPreferencesKey("matches")
+    private val USER_ID_KEY = stringPreferencesKey("user_id")
+
 
     val userNameFlow: Flow<String> =
         context.dataStore.data.map { preferences ->
@@ -36,6 +38,10 @@ class PredictionStorage(private val context: Context) {
 
         val type = object : TypeToken<List<Match>>() {}.type
         Gson().fromJson<List<Match>>(json, type)
+    }
+
+    val userIdFlow = context.dataStore.data.map { preferences ->
+        preferences[USER_ID_KEY]
     }
 
     suspend fun saveUserName(name: String) {
@@ -83,9 +89,23 @@ class PredictionStorage(private val context: Context) {
         }
     }
 
+    suspend fun logout() {
+        context.dataStore.edit { preferences ->
+            preferences.remove(userNameKey)
+            preferences.remove(USER_ID_KEY)
+            preferences.remove(predictionsKey)
+        }
+    }
+
     suspend fun saveMatches(matches: List<Match>) {
         context.dataStore.edit { preferences ->
             preferences[MATCHES_KEY] = Gson().toJson(matches)
+        }
+    }
+
+    suspend fun saveUserId(userId: String) {
+        context.dataStore.edit { preferences ->
+            preferences[USER_ID_KEY] = userId
         }
     }
 }
