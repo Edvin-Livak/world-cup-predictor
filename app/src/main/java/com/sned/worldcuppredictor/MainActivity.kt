@@ -66,9 +66,10 @@ fun WorldCupPredictorApp() {
 
     val savedUserName by storage.userNameFlow.collectAsState(initial = "")
     val savedPredictions by storage.predictionsFlow.collectAsState(initial = emptyMap())
+    val savedMatches by storage.matchesFlow.collectAsState(initial = emptyList())
 
     var userNameInput by remember { mutableStateOf("") }
-    var matches by remember { mutableStateOf<List<Match>>(emptyList()) }
+    var matches by remember { mutableStateOf(savedMatches) }
     val resultService = remember { MatchResultService() }
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -79,15 +80,24 @@ fun WorldCupPredictorApp() {
         }
     }
 
+    LaunchedEffect(savedMatches) {
+        if (matches.isEmpty() && savedMatches.isNotEmpty()) {
+            matches = savedMatches
+        }
+    }
+
     LaunchedEffect(savedUserName) {
         if (savedUserName.isNotBlank() && matches.isEmpty()) {
             isLoading = true
             errorMessage = null
 
             try {
-                matches = resultService.fetchMatchesFromApi(
+                val fetchedMatches = resultService.fetchMatchesFromApi(
                     apiKey = BuildConfig.API_FOOTBALL_KEY
                 )
+
+                matches = fetchedMatches
+                storage.saveMatches(fetchedMatches)
             } catch (e: Exception) {
                 android.util.Log.e("API_TEST", "Auto fetch failed", e)
                 errorMessage = "Could not load matches: ${e.message}"
@@ -133,9 +143,12 @@ fun WorldCupPredictorApp() {
 
                     try {
                         android.util.Log.d("API_TEST", "Calling API")
-                        matches = resultService.fetchMatchesFromApi(
+                        val fetchedMatches = resultService.fetchMatchesFromApi(
                             apiKey = BuildConfig.API_FOOTBALL_KEY
                         )
+
+                        matches = fetchedMatches
+                        storage.saveMatches(fetchedMatches)
                         android.util.Log.d("API_TEST", "Loaded ${matches.size} matches")
                     } catch (e: Exception) {
                         android.util.Log.e("API_TEST", "API failed", e)

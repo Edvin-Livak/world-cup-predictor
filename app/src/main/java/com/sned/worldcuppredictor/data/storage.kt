@@ -7,6 +7,9 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.sned.worldcuppredictor.model.Prediction
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
+import com.sned.worldcuppredictor.model.Match
 
 private val Context.dataStore by preferencesDataStore(name = "world_cup_predictor")
 
@@ -14,6 +17,8 @@ class PredictionStorage(private val context: Context) {
 
     private val userNameKey = stringPreferencesKey("user_name")
     private val predictionsKey = stringPreferencesKey("predictions")
+
+    private val MATCHES_KEY = stringPreferencesKey("matches")
 
     val userNameFlow: Flow<String> =
         context.dataStore.data.map { preferences ->
@@ -25,6 +30,13 @@ class PredictionStorage(private val context: Context) {
             val raw = preferences[predictionsKey] ?: ""
             decodePredictions(raw)
         }
+
+    val matchesFlow = context.dataStore.data.map { preferences ->
+        val json = preferences[MATCHES_KEY] ?: return@map emptyList<Match>()
+
+        val type = object : TypeToken<List<Match>>() {}.type
+        Gson().fromJson<List<Match>>(json, type)
+    }
 
     suspend fun saveUserName(name: String) {
         context.dataStore.edit { preferences ->
@@ -68,6 +80,12 @@ class PredictionStorage(private val context: Context) {
     suspend fun clearAll() {
         context.dataStore.edit { preferences ->
             preferences.clear()
+        }
+    }
+
+    suspend fun saveMatches(matches: List<Match>) {
+        context.dataStore.edit { preferences ->
+            preferences[MATCHES_KEY] = Gson().toJson(matches)
         }
     }
 }
