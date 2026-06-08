@@ -18,7 +18,6 @@ import com.sned.worldcuppredictor.ui.theme.WorldCupPredictorTheme
 import com.sned.worldcuppredictor.model.Match
 import com.sned.worldcuppredictor.model.Prediction
 import com.sned.worldcuppredictor.model.UserScore
-import com.sned.worldcuppredictor.data.mockMatches
 import com.sned.worldcuppredictor.model.MatchStatus
 import com.sned.worldcuppredictor.scoring.calculatePoints
 import androidx.compose.runtime.collectAsState
@@ -26,7 +25,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import com.sned.worldcuppredictor.storage.PredictionStorage
 import kotlinx.coroutines.launch
 import com.sned.worldcuppredictor.api.MatchResultService
-import com.sned.worldcuppredictor.BuildConfig
 import coil.compose.AsyncImage
 import androidx.compose.ui.layout.ContentScale
 import android.widget.Toast
@@ -34,14 +32,11 @@ import androidx.compose.foundation.lazy.LazyRow
 import coil.ImageLoader
 import coil.decode.SvgDecoder
 import coil.request.ImageRequest
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.ui.draw.blur
 import com.sned.worldcuppredictor.repository.ProfileRepository
 import com.sned.worldcuppredictor.repository.PredictionRepository
-import kotlin.text.get
 import com.sned.worldcuppredictor.model.MatchPredictionView
 
 enum class AppTab {
@@ -105,7 +100,8 @@ fun WorldCupPredictorApp() {
                             it.matchId to Prediction(
                                 matchId = it.matchId,
                                 homeGoals = it.homeGoals,
-                                awayGoals = it.awayGoals
+                                awayGoals = it.awayGoals,
+                                penaltyWinner = it.penaltyWinner
                             )
                         }
 
@@ -157,7 +153,8 @@ fun WorldCupPredictorApp() {
                     it.matchId to Prediction(
                         matchId = it.matchId,
                         homeGoals = it.homeGoals,
-                        awayGoals = it.awayGoals
+                        awayGoals = it.awayGoals,
+                        penaltyWinner = it.penaltyWinner
                     )
                 }
 
@@ -357,9 +354,37 @@ fun WorldCupPredictorApp() {
                     matches = matches.map { match ->
                         if (match.id == firstMatch.id) {
                             match.copy(
+                                group = "LAST_16",
+                                stage = "LAST_16",
                                 status = MatchStatus.FINISHED,
                                 actualHomeGoals = 2,
-                                actualAwayGoals = 1
+                                actualAwayGoals = 1,
+                                penaltyWinner = null
+                            )
+                        } else {
+                            match
+                        }
+                    }
+
+                    scope.launch {
+                        storage.saveMatches(matches)
+                        refreshLeaderboard()
+                    }
+                }
+            },
+            onSetFinishFirstMatch = {
+                val firstMatch = matches.firstOrNull()
+
+                if (firstMatch != null) {
+                    matches = matches.map { match ->
+                        if (match.id == firstMatch.id) {
+                            match.copy(
+                                group = "LAST_16",
+                                stage = "LAST_16",
+                                status = MatchStatus.SCHEDULED,
+                                actualHomeGoals = null,
+                                actualAwayGoals = null,
+                                penaltyWinner = null
                             )
                         } else {
                             match
@@ -515,7 +540,8 @@ fun MainScreen(
     onRefreshLeaderboard: () -> Unit,
     onTestFinishFirstMatch: () -> Unit,
     onViewMatchPredictions: (Match) -> Unit,
-    onLogOut: () -> Unit
+    onLogOut: () -> Unit,
+    onSetFinishFirstMatch: () -> Unit
 ) {
     var selectedTab by remember { mutableStateOf(AppTab.Predictions) }
     val currentUserPoints = matches.sumOf { match ->
@@ -563,6 +589,7 @@ fun MainScreen(
                 onPredictionChange = onPredictionChange,
                 onSimulateResultUpdate = onSimulateResultUpdate,
                 onTestFinishFirstMatch = onTestFinishFirstMatch,
+                onSetFinishFirstMatch = onSetFinishFirstMatch,
                 onViewMatchPredictions = onViewMatchPredictions
             )
 
@@ -592,6 +619,7 @@ fun PredictionsScreen(
     onPredictionChange: (Prediction) -> Unit,
     onSimulateResultUpdate: () -> Unit,
     onTestFinishFirstMatch: () -> Unit,
+    onSetFinishFirstMatch: () -> Unit,
     onViewMatchPredictions: (Match) -> Unit
 ) {
     val sections = matches
@@ -649,10 +677,17 @@ fun PredictionsScreen(
         }
 
         OutlinedButton(
+            onClick = onSetFinishFirstMatch,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Set first match to knockout match")
+        }
+
+        OutlinedButton(
             onClick = onTestFinishFirstMatch,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Test finish first match 2-1")
+            Text("Test finish first match 1-1 pens HOME")
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -759,6 +794,24 @@ fun ProfileScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "Scoring rules",
+                    style = MaterialTheme.typography.titleMedium
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text("• Correct winner or draw: 1 point")
+                Text("• Exact score: +3 points")
+                Text("• Maximum per match: 4 points")
+                Text("• Penalty shootouts do not count toward the predicted score")
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
         Button(
             onClick = onLogOut,
             modifier = Modifier.fillMaxWidth()
@@ -800,6 +853,15 @@ fun MatchCard(
         MatchStatus.LIVE -> Color(0xFFF44336)      // Red
         MatchStatus.FINISHED -> Color.Transparent
     }
+
+    var penaltyWinner by remember(match.id, prediction) {
+        mutableStateOf(prediction?.penaltyWinner)
+    }
+
+    val isKnockout = match.stage != null && match.stage != "GROUP_STAGE"
+    val isDrawPrediction =
+        homeGoalsText.toIntOrNull() != null &&
+                homeGoalsText.toIntOrNull() == awayGoalsText.toIntOrNull()
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -878,7 +940,7 @@ fun MatchCard(
                     value = homeGoalsText,
                     onValueChange = {
                         homeGoalsText = it.filter { char -> char.isDigit() }
-                        savePrediction(match.id, homeGoalsText, awayGoalsText, onPredictionChange)
+                        savePrediction(match.id, homeGoalsText, awayGoalsText, penaltyWinner, onPredictionChange)
                     },
                     label = { Text(match.homeTeam) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -891,13 +953,49 @@ fun MatchCard(
                     value = awayGoalsText,
                     onValueChange = {
                         awayGoalsText = it.filter { char -> char.isDigit() }
-                        savePrediction(match.id, homeGoalsText, awayGoalsText, onPredictionChange)
+                        savePrediction(match.id, homeGoalsText, awayGoalsText, penaltyWinner, onPredictionChange)
                     },
                     label = { Text(match.awayTeam) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.weight(1f),
                     singleLine = true
                 )
+            }
+
+            if (isKnockout && isDrawPrediction) {
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text("If penalty shootout, who wins?")
+
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        enabled = !isLocked,
+                        onClick = {
+                            penaltyWinner = "HOME"
+                            savePrediction(match.id, homeGoalsText, awayGoalsText, penaltyWinner, onPredictionChange)
+                        },
+                        border = BorderStroke(
+                            width = if (penaltyWinner == "HOME") 3.dp else 1.dp,
+                            color = if (penaltyWinner == "HOME") Color(0xFF4CAF50) else MaterialTheme.colorScheme.outline
+                        )
+                    ) {
+                        Text(match.homeTla ?: match.homeTeam)
+                    }
+
+                    OutlinedButton(
+                        enabled = !isLocked,
+                        onClick = {
+                            penaltyWinner = "AWAY"
+                            savePrediction(match.id, homeGoalsText, awayGoalsText, penaltyWinner, onPredictionChange)
+                        },
+                        border = BorderStroke(
+                            width = if (penaltyWinner == "AWAY") 3.dp else 1.dp,
+                            color = if (penaltyWinner == "AWAY") Color(0xFF4CAF50) else MaterialTheme.colorScheme.outline
+                        )
+                    ) {
+                        Text(match.awayTla ?: match.awayTeam)
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -959,6 +1057,7 @@ fun savePrediction(
     matchId: Int,
     homeGoalsText: String,
     awayGoalsText: String,
+    penaltyWinner: String?,
     onPredictionChange: (Prediction) -> Unit
 ) {
     val homeGoals = homeGoalsText.toIntOrNull()
@@ -969,7 +1068,8 @@ fun savePrediction(
             Prediction(
                 matchId = matchId,
                 homeGoals = homeGoals,
-                awayGoals = awayGoals
+                awayGoals = awayGoals,
+                penaltyWinner = penaltyWinner
             )
         )
     }

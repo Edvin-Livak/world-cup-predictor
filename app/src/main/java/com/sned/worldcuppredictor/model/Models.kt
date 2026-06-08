@@ -20,13 +20,18 @@ data class Match(
     val homeLogoUrl: String? = null,
     val awayLogoUrl: String? = null,
     val venue: String? = null,
-    val matchday: Int? = null
+    val matchday: Int? = null,
+    val homeTla: String? = null,
+    val awayTla: String? = null,
+    val stage: String? = null,
+    val penaltyWinner: String? = null
 )
 
 data class Prediction(
     val matchId: Int,
     val homeGoals: Int,
-    val awayGoals: Int
+    val awayGoals: Int,
+    val penaltyWinner: String? = null // "HOME", "AWAY", or null
 )
 
 data class UserScore(

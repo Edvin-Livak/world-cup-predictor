@@ -34,7 +34,10 @@ class MatchResultService {
                     homeLogoUrl = item.homeTeam.crest,
                     awayLogoUrl = item.awayTeam.crest,
                     venue = null,
-                    matchday = item.matchday
+                    matchday = item.matchday,
+                    homeTla = item.homeTeam.tla,
+                    awayTla = item.awayTeam.tla,
+                    stage = item.stage
                 )
             }
     }
@@ -43,14 +46,6 @@ class MatchResultService {
         return when (status) {
             "FINISHED" -> MatchStatus.FINISHED
             "LIVE", "IN_PLAY", "PAUSED" -> MatchStatus.LIVE
-            else -> MatchStatus.SCHEDULED
-        }
-    }
-
-    private fun mapStatus(status: String): MatchStatus {
-        return when (status) {
-            "FT", "AET", "PEN" -> MatchStatus.FINISHED
-            "1H", "HT", "2H", "ET", "BT", "P", "LIVE" -> MatchStatus.LIVE
             else -> MatchStatus.SCHEDULED
         }
     }

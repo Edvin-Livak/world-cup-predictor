@@ -6,23 +6,66 @@ import com.sned.worldcuppredictor.model.Prediction
 
 fun calculatePoints(match: Match, prediction: Prediction): Int {
     if (match.status != MatchStatus.FINISHED) return 0
-    if (match.actualHomeGoals == null || match.actualAwayGoals == null) return 0
 
-    val predictedWinner = prediction.homeGoals.compareTo(prediction.awayGoals)
-    val actualWinner = match.actualHomeGoals.compareTo(match.actualAwayGoals)
+    val actualHome = match.actualHomeGoals ?: return 0
+    val actualAway = match.actualAwayGoals ?: return 0
 
-    var points = 0
+    val predictedOutcome = getOutcome(
+        homeGoals = prediction.homeGoals,
+        awayGoals = prediction.awayGoals
+    )
 
-    if (predictedWinner == actualWinner) {
-        points += 1
+    val actualOutcome = getOutcome(
+        homeGoals = actualHome,
+        awayGoals = actualAway
+    )
+
+    val exactScore =
+        prediction.homeGoals == actualHome &&
+                prediction.awayGoals == actualAway
+
+    val wentToPenalties = match.penaltyWinner != null
+
+    return if (wentToPenalties) {
+        android.util.Log.d(
+            "SCORING_TEST",
+            "prediction pens=${prediction.penaltyWinner}, match pens=${match.penaltyWinner}"
+        )
+        var points = 0
+
+        if (exactScore) {
+            points += 3
+        } else if (predictedOutcome == "DRAW" || predictedOutcome == match.penaltyWinner) {
+            points += 1
+        }
+
+        if (prediction.penaltyWinner == match.penaltyWinner) {
+            points += 1
+        }
+
+        points
+    } else {
+        var points = 0
+
+        if (predictedOutcome == actualOutcome || prediction.penaltyWinner == actualOutcome) {
+            points += 1
+        }
+
+        if (exactScore) {
+            points += 3
+        }
+
+        points
     }
+}
 
-    if (
-        prediction.homeGoals == match.actualHomeGoals &&
-        prediction.awayGoals == match.actualAwayGoals
-    ) {
-        points += 3
+private fun getOutcome(
+    homeGoals: Int,
+    awayGoals: Int
+): String {
+    return when {
+        homeGoals > awayGoals -> "HOME"
+        homeGoals < awayGoals -> "AWAY"
+        else -> "DRAW"
     }
-
-    return points
 }

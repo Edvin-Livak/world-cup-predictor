@@ -17,5 +17,8 @@ data class SupabasePrediction(
     val homeGoals: Int,
 
     @SerialName("away_goals")
-    val awayGoals: Int
+    val awayGoals: Int,
+
+    @SerialName("penalty_winner")
+    val penaltyWinner: String? = null
 )

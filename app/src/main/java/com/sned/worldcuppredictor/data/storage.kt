@@ -58,7 +58,12 @@ class PredictionStorage(private val context: Context) {
 
     private fun encodePredictions(predictions: Map<Int, Prediction>): String {
         return predictions.values.joinToString(separator = "|") { prediction ->
-            "${prediction.matchId},${prediction.homeGoals},${prediction.awayGoals}"
+            listOf(
+                prediction.matchId,
+                prediction.homeGoals,
+                prediction.awayGoals,
+                prediction.penaltyWinner ?: ""
+            ).joinToString(",")
         }
     }
 
@@ -68,16 +73,23 @@ class PredictionStorage(private val context: Context) {
         return raw.split("|")
             .mapNotNull { item ->
                 val parts = item.split(",")
-                if (parts.size != 3) return@mapNotNull null
+
+                if (parts.size < 3) return@mapNotNull null
 
                 val matchId = parts[0].toIntOrNull()
                 val homeGoals = parts[1].toIntOrNull()
                 val awayGoals = parts[2].toIntOrNull()
+                val penaltyWinner = parts.getOrNull(3)?.ifBlank { null }
 
                 if (matchId == null || homeGoals == null || awayGoals == null) {
                     null
                 } else {
-                    matchId to Prediction(matchId, homeGoals, awayGoals)
+                    matchId to Prediction(
+                        matchId = matchId,
+                        homeGoals = homeGoals,
+                        awayGoals = awayGoals,
+                        penaltyWinner = penaltyWinner
+                    )
                 }
             }
             .toMap()

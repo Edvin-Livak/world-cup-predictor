@@ -27,7 +27,8 @@ class PredictionRepository {
                 userId = userId,
                 matchId = prediction.matchId,
                 homeGoals = prediction.homeGoals,
-                awayGoals = prediction.awayGoals
+                awayGoals = prediction.awayGoals,
+                penaltyWinner = prediction.penaltyWinner
             )
 
             SupabaseClient.client
@@ -40,6 +41,7 @@ class PredictionRepository {
                     {
                         set("home_goals", prediction.homeGoals)
                         set("away_goals", prediction.awayGoals)
+                        set("penalty_winner", prediction.penaltyWinner)
                     }
                 ) {
                     filter {
