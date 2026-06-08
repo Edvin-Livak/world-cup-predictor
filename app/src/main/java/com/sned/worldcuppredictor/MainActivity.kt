@@ -68,7 +68,7 @@ fun WorldCupPredictorApp() {
     val savedPredictions by storage.predictionsFlow.collectAsState(initial = emptyMap())
 
     var userNameInput by remember { mutableStateOf("") }
-    var matches by remember { mutableStateOf(mockMatches) }
+    var matches by remember { mutableStateOf<List<Match>>(emptyList()) }
     val resultService = remember { MatchResultService() }
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -76,6 +76,24 @@ fun WorldCupPredictorApp() {
     LaunchedEffect(savedUserName) {
         if (userNameInput.isBlank()) {
             userNameInput = savedUserName
+        }
+    }
+
+    LaunchedEffect(savedUserName) {
+        if (savedUserName.isNotBlank() && matches.isEmpty()) {
+            isLoading = true
+            errorMessage = null
+
+            try {
+                matches = resultService.fetchMatchesFromApi(
+                    apiKey = BuildConfig.API_FOOTBALL_KEY
+                )
+            } catch (e: Exception) {
+                android.util.Log.e("API_TEST", "Auto fetch failed", e)
+                errorMessage = "Could not load matches: ${e.message}"
+            } finally {
+                isLoading = false
+            }
         }
     }
 
@@ -128,7 +146,7 @@ fun WorldCupPredictorApp() {
                 }
             },
             onResetApp = {
-                matches = mockMatches
+                matches = emptyList()
 
                 scope.launch {
                     storage.clearAll()
@@ -332,6 +350,11 @@ fun PredictionsScreen(
         }
 
         Spacer(modifier = Modifier.height(16.dp))
+
+        if (!isLoading && matches.isEmpty()) {
+            Text("No matches loaded yet. Tap Check latest results to update.")
+            Spacer(modifier = Modifier.height(16.dp))
+        }
 
         LazyColumn(
             verticalArrangement = Arrangement.spacedBy(12.dp)
