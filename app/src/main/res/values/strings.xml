@@ -1,3 +1,41 @@
 <resources>
-    <string name="app_name">WorldCupPredictor</string>
+    <string name="app_name">World Cup Predictor</string>
+    <string name="your_name">Your name</string>
+    <string name="pin_label">4-digit PIN</string>
+    <string name="login">Log in</string>
+    <string name="create_profile">Create New Profile</string>
+    <string name="predictions">Predictions</string>
+    <string name="leaderboard">Leaderboard</string>
+    <string name="profile">Profile</string>
+    <string name="your_points">Your points</string>
+    <string name="check_latest_results">Check latest results</string>
+    <string name="prediction_open">Prediction open</string>
+    <string name="prediction_locked">Prediction locked — match has started</string>
+    <string name="view_other_predictions">View other predictions</string>
+    <string name="scoring_rules">Scoring rules</string>
+    <string name="logout">Log out</string>
+    <string name="no_matches_loaded">No matches loaded yet. Tap Check latest results to update</string>
+    <string name="updating">Updating...</string>
+    <string name="refresh_leader">Refresh leaderboard</string>
+    <string name="no_leader_data">No leaderboard data yet.</string>
+    <string name="name">Name:</string>
+    <string name="if_penalty">If penalty shootout, who wins?</string>
+    <string name="result">Result:</string>
+    <string name="points">Points:</string>
+    <string name="points2">points</string>
+    <string name="pens">pens</string>
+
+
+    <string name="no_prediction">No prediction</string>
+    <string name="rules_group_title">Group stage</string>
+    <string name="rules_group_body">• Correct winner or draw: 1 point\n• Exact score: +3 points\n• Max: 4 points</string>
+
+    <string name="rules_knockout_title">Knockout stage</string>
+    <string name="rules_knockout_body">• Same rules if no penalties\n• If penalties: exact score = 3 points\n• Predicted draw but wrong score = 1 point\n• Correct penalty winner = +1 point\n• Correct winner without predicting penalties = +1 point\n• Max: 4 points</string>
+
+    <string name="show_examples">Show examples</string>
+    <string name="scoring_examples">Scoring examples</string>
+    <string name="close">Close</string>
+
+    <string name="rules_examples_body">Group stage example:\nPrediction: SWE–ENG 2–2\nActual: SWE–ENG 1–1\nPoints: 1, correct draw\n\nPrediction: SWE–ENG 3–3\nActual: SWE–ENG 3–3\nPoints: 4, exact score\n\nKnockout penalties example:\nActual: MEX–IRN 1–1, Mexico wins penalties\n\nPrediction: 1–1 + Mexico pens = 4\nPrediction: 1–1 + Iran pens = 3\nPrediction: 2–2 + Mexico pens = 2\nPrediction: 2–2 + Iran pens = 1\nPrediction: 3–1 = 1, correct winner only</string>
 </resources>

@@ -38,6 +38,7 @@ import androidx.compose.foundation.BorderStroke
 import com.sned.worldcuppredictor.repository.ProfileRepository
 import com.sned.worldcuppredictor.repository.PredictionRepository
 import com.sned.worldcuppredictor.model.MatchPredictionView
+import androidx.compose.ui.res.stringResource
 
 enum class AppTab {
     Predictions,
@@ -135,10 +136,21 @@ fun WorldCupPredictorApp() {
                     it.userId == profile.id && it.matchId == match.id
                 }
 
+                val predictionObject = prediction?.let {
+                    Prediction(
+                        matchId = it.matchId,
+                        homeGoals = it.homeGoals,
+                        awayGoals = it.awayGoals,
+                        penaltyWinner = it.penaltyWinner
+                    )
+                }
+
                 MatchPredictionView(
                     username = profile.username,
                     homeGoals = prediction?.homeGoals,
-                    awayGoals = prediction?.awayGoals
+                    awayGoals = prediction?.awayGoals,
+                    penaltyWinner = prediction?.penaltyWinner,
+                    points = predictionObject?.let { calculatePoints(match, it) }
                 )
             }.sortedBy { it.username }
         }
@@ -338,65 +350,8 @@ fun WorldCupPredictorApp() {
                     }
                 }
             },
-            onResetApp = {
-                matches = emptyList()
-
-                scope.launch {
-                    storage.clearAll()
-                }
-            },
             leaderboardUsers = leaderboardUsers,
             onRefreshLeaderboard = { refreshLeaderboard() },
-            onTestFinishFirstMatch = {
-                val firstMatch = matches.firstOrNull()
-
-                if (firstMatch != null) {
-                    matches = matches.map { match ->
-                        if (match.id == firstMatch.id) {
-                            match.copy(
-                                group = "LAST_16",
-                                stage = "LAST_16",
-                                status = MatchStatus.FINISHED,
-                                actualHomeGoals = 2,
-                                actualAwayGoals = 1,
-                                penaltyWinner = null
-                            )
-                        } else {
-                            match
-                        }
-                    }
-
-                    scope.launch {
-                        storage.saveMatches(matches)
-                        refreshLeaderboard()
-                    }
-                }
-            },
-            onSetFinishFirstMatch = {
-                val firstMatch = matches.firstOrNull()
-
-                if (firstMatch != null) {
-                    matches = matches.map { match ->
-                        if (match.id == firstMatch.id) {
-                            match.copy(
-                                group = "LAST_16",
-                                stage = "LAST_16",
-                                status = MatchStatus.SCHEDULED,
-                                actualHomeGoals = null,
-                                actualAwayGoals = null,
-                                penaltyWinner = null
-                            )
-                        } else {
-                            match
-                        }
-                    }
-
-                    scope.launch {
-                        storage.saveMatches(matches)
-                        refreshLeaderboard()
-                    }
-                }
-            },
             onViewMatchPredictions = { match ->
                 showPredictionsForMatch(match)
             },
@@ -432,12 +387,29 @@ fun WorldCupPredictorApp() {
 
                             val predictionText =
                                 if (item.homeGoals == null || item.awayGoals == null) {
-                                    "No prediction"
+                                    stringResource(R.string.no_prediction)
                                 } else {
-                                    "${item.homeGoals} - ${item.awayGoals}"
+
+                                    val predictedDraw = item.homeGoals == item.awayGoals
+
+                                    val pensText =
+                                        if (predictedDraw) {
+                                            when (item.penaltyWinner) {
+                                                "HOME" -> " + ${match.homeTeam} " + stringResource(R.string.pens)
+                                                "AWAY" -> " + ${match.awayTeam} " + stringResource(R.string.pens)
+                                                else -> ""
+                                            }
+                                        } else {
+                                            ""
+                                        }
+
+                                    "${item.homeGoals} - ${item.awayGoals}$pensText"
                                 }
 
-                            Text(predictionText)
+                            val pointsText =
+                                if (item.points == null) "" else " · ${item.points} " + stringResource(R.string.points2)
+
+                            Text("$predictionText$pointsText")
                         }
                     }
 
@@ -467,7 +439,7 @@ fun NameScreen(
             verticalArrangement = Arrangement.Center
         ) {
             Text(
-                text = "World Cup Predictor",
+                text = stringResource(R.string.app_name),
                 style = MaterialTheme.typography.headlineMedium
             )
 
@@ -476,7 +448,7 @@ fun NameScreen(
             OutlinedTextField(
                 value = userName,
                 onValueChange = onNameChange,
-                label = { Text("Your name") },
+                label = { Text(stringResource(R.string.your_name)) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true
             )
@@ -494,7 +466,7 @@ fun NameScreen(
                 onValueChange = {
                     onPinChange(it.filter { c -> c.isDigit() }.take(4))
                 },
-                label = { Text("4-digit PIN") },
+                label = { Text(stringResource(R.string.pin_label)) },
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.NumberPassword
                 ),
@@ -509,7 +481,7 @@ fun NameScreen(
                 enabled = !isLoading,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text(if (isLoading) "Logging in..." else "Log in")
+                Text(if (isLoading) "Logging in..." else stringResource(R.string.login))
             }
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -519,7 +491,7 @@ fun NameScreen(
                 enabled = !isLoading,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text(if (isLoading) "Creating profile..." else "Create New Profile")
+                Text(if (isLoading) "Creating profile..." else stringResource(R.string.create_profile))
             }
         }
     }
@@ -535,13 +507,10 @@ fun MainScreen(
     errorMessage: String?,
     onPredictionChange: (Prediction) -> Unit,
     onSimulateResultUpdate: () -> Unit,
-    onResetApp: () -> Unit,
     leaderboardUsers: List<UserScore>,
     onRefreshLeaderboard: () -> Unit,
-    onTestFinishFirstMatch: () -> Unit,
     onViewMatchPredictions: (Match) -> Unit,
     onLogOut: () -> Unit,
-    onSetFinishFirstMatch: () -> Unit
 ) {
     var selectedTab by remember { mutableStateOf(AppTab.Predictions) }
     val currentUserPoints = matches.sumOf { match ->
@@ -551,7 +520,7 @@ fun MainScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("World Cup Predictor") }
+                title = { Text(stringResource(R.string.app_name)) }
             )
         },
         bottomBar = {
@@ -560,21 +529,21 @@ fun MainScreen(
                     selected = selectedTab == AppTab.Predictions,
                     onClick = { selectedTab = AppTab.Predictions },
                     icon = { Text("⚽") },
-                    label = { Text("Predictions") }
+                    label = { Text(stringResource(R.string.predictions)) }
                 )
 
                 NavigationBarItem(
                     selected = selectedTab == AppTab.Leaderboard,
                     onClick = { selectedTab = AppTab.Leaderboard },
                     icon = { Text("🏆") },
-                    label = { Text("Leaderboard") }
+                    label = { Text(stringResource(R.string.leaderboard)) }
                 )
 
                 NavigationBarItem(
                     selected = selectedTab == AppTab.Profile,
                     onClick = { selectedTab = AppTab.Profile },
                     icon = { Text("👤") },
-                    label = { Text("Profile") }
+                    label = { Text(stringResource(R.string.profile)) }
                 )
             }
         }
@@ -588,8 +557,6 @@ fun MainScreen(
                 errorMessage = errorMessage,
                 onPredictionChange = onPredictionChange,
                 onSimulateResultUpdate = onSimulateResultUpdate,
-                onTestFinishFirstMatch = onTestFinishFirstMatch,
-                onSetFinishFirstMatch = onSetFinishFirstMatch,
                 onViewMatchPredictions = onViewMatchPredictions
             )
 
@@ -602,7 +569,6 @@ fun MainScreen(
             AppTab.Profile -> ProfileScreen(
                 modifier = Modifier.padding(padding),
                 userName = userName,
-                onResetApp = onResetApp,
                 onLogOut = onLogOut
             )
         }
@@ -618,8 +584,6 @@ fun PredictionsScreen(
     errorMessage: String?,
     onPredictionChange: (Prediction) -> Unit,
     onSimulateResultUpdate: () -> Unit,
-    onTestFinishFirstMatch: () -> Unit,
-    onSetFinishFirstMatch: () -> Unit,
     onViewMatchPredictions: (Match) -> Unit
 ) {
     val sections = matches
@@ -661,7 +625,7 @@ fun PredictionsScreen(
     ) {
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text("Your points", style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.your_points), style = MaterialTheme.typography.titleMedium)
                 Text("$totalPoints", style = MaterialTheme.typography.headlineLarge)
             }
         }
@@ -673,21 +637,7 @@ fun PredictionsScreen(
             enabled = !isLoading,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text(if (isLoading) "Updating..." else "Check latest results")
-        }
-
-        OutlinedButton(
-            onClick = onSetFinishFirstMatch,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Set first match to knockout match")
-        }
-
-        OutlinedButton(
-            onClick = onTestFinishFirstMatch,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Test finish first match 1-1 pens HOME")
+            Text(if (isLoading) stringResource(R.string.updating) else stringResource(R.string.check_latest_results))
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -707,7 +657,7 @@ fun PredictionsScreen(
         Spacer(modifier = Modifier.height(16.dp))
 
         if (!isLoading && matches.isEmpty()) {
-            Text("No matches loaded yet. Tap Check latest results to update.")
+            Text(stringResource(R.string.no_matches_loaded))
             Spacer(modifier = Modifier.height(16.dp))
         }
 
@@ -737,7 +687,7 @@ fun LeaderboardScreen(
             .fillMaxSize()
             .padding(24.dp)
     ) {
-        Text("Leaderboard", style = MaterialTheme.typography.headlineMedium)
+        Text(stringResource(R.string.leaderboard), style = MaterialTheme.typography.headlineMedium)
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -745,13 +695,13 @@ fun LeaderboardScreen(
             onClick = onRefreshLeaderboard,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Refresh leaderboard")
+            Text(stringResource(R.string.refresh_leader))
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
         if (users.isEmpty()) {
-            Text("No leaderboard data yet.")
+            Text(stringResource(R.string.no_leader_data))
         } else {
             users.forEachIndexed { index, user ->
                 Card(
@@ -766,7 +716,7 @@ fun LeaderboardScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text("${index + 1}. ${user.name}")
-                        Text("${user.points} pts")
+                        Text("${user.points} " + stringResource(R.string.points2))
                     }
                 }
             }
@@ -778,54 +728,79 @@ fun LeaderboardScreen(
 fun ProfileScreen(
     modifier: Modifier = Modifier,
     userName: String,
-    onResetApp: () -> Unit,
     onLogOut: () -> Unit
 ) {
+    var showExamples by remember { mutableStateOf(false) }
     Column(
         modifier = modifier
             .fillMaxSize()
             .padding(24.dp)
     ) {
-        Text("Profile", style = MaterialTheme.typography.headlineMedium)
+        Text(stringResource(R.string.profile), style = MaterialTheme.typography.headlineMedium)
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Text("Name: $userName")
+        Text(stringResource(R.string.name) + " $userName")
 
         Spacer(modifier = Modifier.height(24.dp))
 
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
-                    text = "Scoring rules",
+                    text = stringResource(R.string.scoring_rules),
                     style = MaterialTheme.typography.titleMedium
                 )
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-                Text("• Correct winner or draw: 1 point")
-                Text("• Exact score: +3 points")
-                Text("• Maximum per match: 4 points")
-                Text("• Penalty shootouts do not count toward the predicted score")
+                Text(
+                    text = stringResource(R.string.rules_group_title),
+                    style = MaterialTheme.typography.titleSmall
+                )
+                Text(stringResource(R.string.rules_group_body))
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = stringResource(R.string.rules_knockout_title),
+                    style = MaterialTheme.typography.titleSmall
+                )
+                Text(stringResource(R.string.rules_knockout_body))
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                OutlinedButton(
+                    onClick = { showExamples = true },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(stringResource(R.string.show_examples))
+                }
             }
         }
+        if (showExamples) {
+            AlertDialog(
+                onDismissRequest = { showExamples = false },
+                title = {
+                    Text(stringResource(R.string.scoring_examples))
+                },
+                text = {
+                    Text(stringResource(R.string.rules_examples_body))
+                },
+                confirmButton = {
+                    TextButton(onClick = { showExamples = false }) {
+                        Text(stringResource(R.string.close))
+                    }
+                }
+            )
+        }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(48.dp))
 
         Button(
             onClick = onLogOut,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Log out")
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        OutlinedButton(
-            onClick = onResetApp,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Reset local app data")
+            Text(stringResource(R.string.logout))
         }
     }
 }
@@ -910,7 +885,7 @@ fun MatchCard(
             when (match.status) {
                 MatchStatus.SCHEDULED -> {
                     Text(
-                        text = "Prediction open",
+                        text = stringResource(R.string.prediction_open),
                         color = Color(0xFF2E7D32),
                         style = MaterialTheme.typography.labelLarge
                     )
@@ -918,15 +893,15 @@ fun MatchCard(
 
                 MatchStatus.LIVE -> {
                     Text(
-                        text = "Prediction locked — match has started",
+                        text = stringResource(R.string.prediction_locked),
                         color = Color(0xFFC62828),
                         style = MaterialTheme.typography.labelLarge
                     )
                 }
 
                 MatchStatus.FINISHED -> {
-                    Text("Result: ${match.actualHomeGoals}-${match.actualAwayGoals}")
-                    Text("Points: $points")
+                    Text(stringResource(R.string.result) + " ${match.actualHomeGoals}-${match.actualAwayGoals}")
+                    Text(stringResource(R.string.points) + " $points")
                 }
             }
 
@@ -965,7 +940,7 @@ fun MatchCard(
             if (isKnockout && isDrawPrediction) {
                 Spacer(modifier = Modifier.height(12.dp))
 
-                Text("If penalty shootout, who wins?")
+                Text(stringResource(R.string.if_penalty))
 
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(
@@ -1004,7 +979,7 @@ fun MatchCard(
                     onClick = onViewPredictions,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("View other predictions")
+                    Text(stringResource(R.string.view_other_predictions))
                 }
             }
         }
@@ -1064,12 +1039,15 @@ fun savePrediction(
     val awayGoals = awayGoalsText.toIntOrNull()
 
     if (homeGoals != null && awayGoals != null) {
+        val cleanedPenaltyWinner =
+            if (homeGoals == awayGoals) penaltyWinner else null
+
         onPredictionChange(
             Prediction(
                 matchId = matchId,
                 homeGoals = homeGoals,
                 awayGoals = awayGoals,
-                penaltyWinner = penaltyWinner
+                penaltyWinner = cleanedPenaltyWinner
             )
         )
     }

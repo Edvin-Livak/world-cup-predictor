@@ -1,0 +1,40 @@
+<resources>
+    <string name="app_name">VM-tipset</string>
+    <string name="your_name">Ditt namn</string>
+    <string name="pin_label">4-siffrig PIN-kod</string>
+    <string name="login">Logga in</string>
+    <string name="create_profile">Skapa ny profil</string>
+    <string name="predictions">Tippning</string>
+    <string name="leaderboard">Topplista</string>
+    <string name="profile">Profil</string>
+    <string name="your_points">Dina poäng</string>
+    <string name="check_latest_results">Uppdatera resultat</string>
+    <string name="prediction_open">Tippning öppen</string>
+    <string name="prediction_locked">Tippning låst — matchen har startat</string>
+    <string name="view_other_predictions">Visa andras tippningar</string>
+    <string name="scoring_rules">Poängregler</string>
+    <string name="logout">Logga ut</string>
+    <string name="no_matches_loaded">Inga matcher laddade. Tryck på Uppdatera resultat.</string>
+    <string name="updating">Uppdaterar...</string>
+    <string name="refresh_leader">Uppdatera topplista</string>
+    <string name="no_leader_data">Ingen topplista än.</string>
+    <string name="name">Namn:</string>
+    <string name="if_penalty">Om straffar, vem vinner?</string>
+    <string name="result">Resultat:</string>
+    <string name="points">Poäng:</string>
+    <string name="points2">poäng</string>
+    <string name="pens">straffar</string>
+
+    <string name="no_prediction">Inte tippad</string>
+    <string name="rules_group_title">Gruppspel</string>
+    <string name="rules_group_body">• Rätt vinnare eller oavgjort: 1 poäng\n• Exakt resultat: +3 poäng\n• Max: 4 poäng</string>
+
+    <string name="rules_knockout_title">Slutspel</string>
+    <string name="rules_knockout_body">• Samma regler om det inte blir straffar\n• Vid straffar: exakt resultat = 3 poäng\n• Tippat oavgjort men fel resultat = 1 poäng\n• Rätt vinnare på straffar = +1 poäng\n• Rätt vinnare utan att tippa straffar = +1 poäng\n• Max: 4 poäng</string>
+
+    <string name="show_examples">Visa exempel</string>
+    <string name="scoring_examples">Poängexempel</string>
+    <string name="close">Stäng</string>
+
+    <string name="rules_examples_body">Exempel gruppspel:\nTippning: SVE–ENG 2–2\nResultat: SVE–ENG 1–1\nPoäng: 1, rätt oavgjort\n\nTippning: SVE–ENG 3–3\nResultat: SVE–ENG 3–3\nPoäng: 4, exakt resultat\n\nExempel slutspel med straffar:\nResultat: MEX–IRN 1–1, Mexiko vinner på straffar\n\nTippning: 1–1 + Mexiko straffar = 4\nTippning: 1–1 + Iran straffar = 3\nTippning: 2–2 + Mexiko straffar = 2\nTippning: 2–2 + Iran straffar = 1\nTippning: 3–1 = 1, rätt vinnare</string>
+</resources>
