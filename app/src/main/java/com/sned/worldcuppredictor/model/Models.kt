@@ -36,5 +36,6 @@ data class Prediction(
 
 data class UserScore(
     val name: String,
-    val points: Int
+    val points: Int,
+    val exactPredictions: Int = 0
 )

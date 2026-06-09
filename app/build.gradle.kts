@@ -94,4 +94,5 @@ dependencies {
     implementation("io.github.jan-tennert.supabase:storage-kt:2.5.4")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.1")
     implementation("io.ktor:ktor-client-android:2.3.12")
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
 }

@@ -3,6 +3,14 @@
     <string name="your_name">Your name</string>
     <string name="pin_label">4-digit PIN</string>
     <string name="login">Log in</string>
+    <string name="loginerror">Username already taken or PIN code not 4 numbers long.</string>
+    <string name="could_not_create_profile">Could not create profile. Try again.</string>
+    <string name="invalidlogin">Invalid username or PIN.</string>
+    <string name="could_not_login">Could not log in. Try again.</string>
+    <string name="could_not_update_matches">Could not update matches:</string>
+    <string name="perfect_predictions">Perfect predictions</string>
+    <string name="checking">Checking latest results...</string>
+
     <string name="create_profile">Create New Profile</string>
     <string name="predictions">Predictions</string>
     <string name="leaderboard">Leaderboard</string>
@@ -31,11 +39,22 @@
     <string name="rules_group_body">• Correct winner or draw: 1 point\n• Exact score: +3 points\n• Max: 4 points</string>
 
     <string name="rules_knockout_title">Knockout stage</string>
-    <string name="rules_knockout_body">• Same rules if no penalties\n• If penalties: exact score = 3 points\n• Predicted draw but wrong score = 1 point\n• Correct penalty winner = +1 point\n• Correct winner without predicting penalties = +1 point\n• Max: 4 points</string>
+    <string name="rules_knockout_body">• Same rules if no penalties</string>
+    <string name="penalties">Penalty rules</string>
+    <string name="rules_penalty_1">• Correct result at full time = 3 points</string>
+    <string name="rules_penalty_2">• Predicted draw but wrong score = 1 point</string>
+    <string name="rules_penalty_3">• Correct penalty winner = +1 point</string>
+    <string name="rules_penalty_4">• Correct winner without predicting penalties = 1 point</string>
+    <string name="rules_penalty_5">• Max: 4 points</string>
 
     <string name="show_examples">Show examples</string>
     <string name="scoring_examples">Scoring examples</string>
     <string name="close">Close</string>
 
     <string name="rules_examples_body">Group stage example:\nPrediction: SWE–ENG 2–2\nActual: SWE–ENG 1–1\nPoints: 1, correct draw\n\nPrediction: SWE–ENG 3–3\nActual: SWE–ENG 3–3\nPoints: 4, exact score\n\nKnockout penalties example:\nActual: MEX–IRN 1–1, Mexico wins penalties\n\nPrediction: 1–1 + Mexico pens = 4\nPrediction: 1–1 + Iran pens = 3\nPrediction: 2–2 + Mexico pens = 2\nPrediction: 2–2 + Iran pens = 1\nPrediction: 3–1 = 1, correct winner only</string>
+
+    <string name="notification_channel_prediction_reminders">Prediction reminders</string>
+    <string name="notification_title">World Cup Predictor</string>
+    <string name="notification_one_match">You have 1 match to predict tomorrow.</string>
+    <string name="notification_multiple_matches">You have %1$d matches to predict tomorrow.</string>
 </resources>

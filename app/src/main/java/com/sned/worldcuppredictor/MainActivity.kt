@@ -39,6 +39,17 @@ import com.sned.worldcuppredictor.repository.ProfileRepository
 import com.sned.worldcuppredictor.repository.PredictionRepository
 import com.sned.worldcuppredictor.model.MatchPredictionView
 import androidx.compose.ui.res.stringResource
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import androidx.work.*
+import java.util.concurrent.TimeUnit
+import java.time.LocalDateTime
+import java.time.LocalTime
+import java.time.Duration
+import com.sned.worldcuppredictor.notifications.PredictionReminderWorker
 
 enum class AppTab {
     Predictions,
@@ -50,6 +61,16 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            requestPermissions(
+                arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
+                100
+            )
+        }
+
+        scheduleDailyReminder(this)
+
         setContent {
             WorldCupPredictorTheme {
                 WorldCupPredictorApp()
@@ -88,6 +109,13 @@ fun WorldCupPredictorApp() {
 
     var pinInput by remember { mutableStateOf("") }
 
+    val loginErrorText = stringResource(R.string.loginerror)
+    val createProfileErrorText = stringResource(R.string.could_not_create_profile)
+    val invalidLoginText = stringResource(R.string.invalidlogin)
+    val couldNotLoginText = stringResource(R.string.could_not_login)
+    val couldNotUpdateMatches = stringResource(R.string.could_not_update_matches)
+    val checking = stringResource(R.string.checking)
+
     fun refreshLeaderboard() {
         scope.launch {
             try {
@@ -112,9 +140,17 @@ fun WorldCupPredictorApp() {
                         } ?: 0
                     }
 
+                    val exactPredictions = matches.count { match ->
+                        userPredictions[match.id]?.let { prediction ->
+                            prediction.homeGoals == match.actualHomeGoals &&
+                                    prediction.awayGoals == match.actualAwayGoals
+                        } ?: false
+                    }
+
                     UserScore(
                         name = profile.username,
-                        points = points
+                        points = points,
+                        exactPredictions = exactPredictions
                     )
                 }.sortedByDescending { it.points }
 
@@ -254,7 +290,7 @@ fun WorldCupPredictorApp() {
                             val username = userNameInput.trim()
 
                             if (profileRepository.usernameExists(username) || pinInput.length != 4) {
-                                loginError = "Username is already taken or PIN code not 4 numbers long."
+                                loginError = loginErrorText
                             } else {
                                 val createdProfile = profileRepository.createProfile(username = username, pin = pinInput)
 
@@ -263,7 +299,7 @@ fun WorldCupPredictorApp() {
                             }
                         } catch (e: Exception) {
                             android.util.Log.e("SUPABASE_TEST", "Could not create profile", e)
-                            loginError = "Could not create profile. Try again."
+                            loginError = createProfileErrorText
                         } finally {
                             isCreatingProfile = false
                         }
@@ -284,11 +320,11 @@ fun WorldCupPredictorApp() {
                                 storage.saveUserName(profile.username)
                                 storage.saveUserId(profile.id)
                             } else {
-                                loginError = "Invalid username or PIN."
+                                loginError = invalidLoginText
                             }
                         } catch (e: Exception) {
                             android.util.Log.e("SUPABASE_TGEST", "Could not log in", e)
-                            loginError = "Could not log in. Try again."
+                            loginError = couldNotLoginText
                         } finally {
                             isCreatingProfile = false
                         }
@@ -326,7 +362,7 @@ fun WorldCupPredictorApp() {
                 }
             },
             onSimulateResultUpdate = {
-                Toast.makeText(context, "Checking latest results...", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, checking, Toast.LENGTH_SHORT).show()
                 android.util.Log.d("API_TEST", "Button clicked")
 
                 scope.launch {
@@ -344,7 +380,7 @@ fun WorldCupPredictorApp() {
                         android.util.Log.d("API_TEST", "Loaded ${matches.size} matches")
                     } catch (e: Exception) {
                         android.util.Log.e("API_TEST", "API failed", e)
-                        errorMessage = "Could not update matches: ${e.message}"
+                        errorMessage = couldNotUpdateMatches + " ${e.message}"
                     } finally {
                         isLoading = false
                     }
@@ -407,7 +443,11 @@ fun WorldCupPredictorApp() {
                                 }
 
                             val pointsText =
-                                if (item.points == null) "" else " · ${item.points} " + stringResource(R.string.points2)
+                                if (match.status == MatchStatus.FINISHED) {
+                                    " · ${item.points ?: 0} " + stringResource(R.string.points2)
+                                } else {
+                                    " · ? " + stringResource(R.string.points2)
+                                }
 
                             Text("$predictionText$pointsText")
                         }
@@ -563,7 +603,8 @@ fun MainScreen(
             AppTab.Leaderboard -> LeaderboardScreen(
                 modifier = Modifier.padding(padding),
                 users = leaderboardUsers,
-                onRefreshLeaderboard = onRefreshLeaderboard
+                onRefreshLeaderboard = onRefreshLeaderboard,
+                currentUsername = userName
             )
 
             AppTab.Profile -> ProfileScreen(
@@ -680,7 +721,8 @@ fun PredictionsScreen(
 fun LeaderboardScreen(
     modifier: Modifier = Modifier,
     users: List<UserScore>,
-    onRefreshLeaderboard: () -> Unit
+    onRefreshLeaderboard: () -> Unit,
+    currentUsername: String?
 ) {
     Column(
         modifier = modifier
@@ -704,10 +746,16 @@ fun LeaderboardScreen(
             Text(stringResource(R.string.no_leader_data))
         } else {
             users.forEachIndexed { index, user ->
+                val isCurrentUser = user.name == currentUsername
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(bottom = 8.dp)
+                        .padding(bottom = 8.dp),
+                    border =
+                        if (isCurrentUser)
+                            BorderStroke(2.dp, Color(0xFF4CAF50))
+                        else
+                            null
                 ) {
                     Row(
                         modifier = Modifier
@@ -715,7 +763,14 @@ fun LeaderboardScreen(
                             .padding(16.dp),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("${index + 1}. ${user.name}")
+                        val medal = when (index) {
+                            0 -> "🥇"
+                            1 -> "🥈"
+                            2 -> "🥉"
+                            else -> "${index + 1}."
+                        }
+
+                        Text("$medal ${user.name}")
                         Text("${user.points} " + stringResource(R.string.points2))
                     }
                 }
@@ -734,6 +789,7 @@ fun ProfileScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(24.dp)
     ) {
         Text(stringResource(R.string.profile), style = MaterialTheme.typography.headlineMedium)
@@ -748,14 +804,14 @@ fun ProfileScreen(
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
                     text = stringResource(R.string.scoring_rules),
-                    style = MaterialTheme.typography.titleMedium
+                    style = MaterialTheme.typography.titleLarge
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Text(
                     text = stringResource(R.string.rules_group_title),
-                    style = MaterialTheme.typography.titleSmall
+                    style = MaterialTheme.typography.titleMedium
                 )
                 Text(stringResource(R.string.rules_group_body))
 
@@ -763,9 +819,24 @@ fun ProfileScreen(
 
                 Text(
                     text = stringResource(R.string.rules_knockout_title),
-                    style = MaterialTheme.typography.titleSmall
+                    style = MaterialTheme.typography.titleMedium
                 )
                 Text(stringResource(R.string.rules_knockout_body))
+                Text(
+                    text = stringResource(R.string.penalties),
+                    style = MaterialTheme.typography.titleSmall
+                )
+
+                Column(
+                    modifier = Modifier.padding(start = 16.dp)
+                ) {
+                    Text(stringResource(R.string.rules_penalty_1))
+                    Text(stringResource(R.string.rules_penalty_2))
+                    Text(stringResource(R.string.rules_penalty_3))
+                    Text(stringResource(R.string.rules_penalty_4))
+                    Text(stringResource(R.string.rules_penalty_5))
+                }
+
 
                 Spacer(modifier = Modifier.height(12.dp))
 
@@ -794,7 +865,7 @@ fun ProfileScreen(
             )
         }
 
-        Spacer(modifier = Modifier.height(48.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
         Button(
             onClick = onLogOut,
@@ -812,7 +883,7 @@ fun MatchCard(
     onPredictionChange: (Prediction) -> Unit,
     onViewPredictions: () -> Unit
 ) {
-    val isLocked = match.status != MatchStatus.SCHEDULED
+    val isLocked = isPredictionLocked(match)
     var homeGoalsText by remember(match.id, prediction) {
         mutableStateOf(prediction?.homeGoals?.toString() ?: "")
     }
@@ -823,10 +894,10 @@ fun MatchCard(
 
     val points = prediction?.let { calculatePoints(match, it) } ?: 0
 
-    val borderColor = when (match.status) {
-        MatchStatus.SCHEDULED -> Color(0xFF4CAF50) // Green
-        MatchStatus.LIVE -> Color(0xFFF44336)      // Red
-        MatchStatus.FINISHED -> Color.Transparent
+    val borderColor = when {
+        match.status == MatchStatus.FINISHED -> Color.Transparent
+        isLocked -> Color(0xFFF44336)
+        else -> Color(0xFF4CAF50)
     }
 
     var penaltyWinner by remember(match.id, prediction) {
@@ -874,24 +945,15 @@ fun MatchCard(
 
 
 
-            Text(match.kickoffTime.substringBefore("T") + " at " + match.kickoffTime.substringAfter("T").substringBefore(":00Z") + " (UTC)")
-
+            Text(formatKickoffTime(match.kickoffTime))
             Spacer(modifier = Modifier.height(8.dp))
 
             HorizontalDivider(
                 modifier = Modifier.padding(vertical = 8.dp)
             )
 
-            when (match.status) {
-                MatchStatus.SCHEDULED -> {
-                    Text(
-                        text = stringResource(R.string.prediction_open),
-                        color = Color(0xFF2E7D32),
-                        style = MaterialTheme.typography.labelLarge
-                    )
-                }
-
-                MatchStatus.LIVE -> {
+            when {
+                isLocked && match.status == MatchStatus.SCHEDULED -> {
                     Text(
                         text = stringResource(R.string.prediction_locked),
                         color = Color(0xFFC62828),
@@ -899,7 +961,23 @@ fun MatchCard(
                     )
                 }
 
-                MatchStatus.FINISHED -> {
+                match.status == MatchStatus.SCHEDULED -> {
+                    Text(
+                        text = stringResource(R.string.prediction_open),
+                        color = Color(0xFF2E7D32),
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
+
+                match.status == MatchStatus.LIVE -> {
+                    Text(
+                        text = stringResource(R.string.prediction_locked),
+                        color = Color(0xFFC62828),
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
+
+                match.status == MatchStatus.FINISHED -> {
                     Text(stringResource(R.string.result) + " ${match.actualHomeGoals}-${match.actualAwayGoals}")
                     Text(stringResource(R.string.points) + " $points")
                 }
@@ -1028,6 +1106,18 @@ fun TeamInfo(
     }
 }
 
+fun isPredictionLocked(match: Match): Boolean {
+    val kickoffInstant = try {
+        Instant.parse(match.kickoffTime)
+    } catch (e: Exception) {
+        return match.status != MatchStatus.SCHEDULED
+    }
+
+    val hasStarted = Instant.now() >= kickoffInstant
+
+    return hasStarted || match.status != MatchStatus.SCHEDULED
+}
+
 fun savePrediction(
     matchId: Int,
     homeGoalsText: String,
@@ -1051,4 +1141,40 @@ fun savePrediction(
             )
         )
     }
+}
+
+fun formatKickoffTime(utcTime: String): String {
+    val instant = Instant.parse(utcTime)
+
+    val localDateTime = instant.atZone(
+        ZoneId.systemDefault()
+    )
+
+    return localDateTime.format(
+        DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm z")
+    )
+}
+
+fun scheduleDailyReminder(context: android.content.Context) {
+    val now = LocalDateTime.now()
+    var nextReminder = now.with(LocalTime.of(18, 0))
+
+    if (nextReminder.isBefore(now)) {
+        nextReminder = nextReminder.plusDays(1)
+    }
+
+    val initialDelay = Duration.between(now, nextReminder).toMillis()
+
+    val request = PeriodicWorkRequestBuilder<PredictionReminderWorker>(
+        1,
+        TimeUnit.DAYS
+    )
+        .setInitialDelay(initialDelay, TimeUnit.MILLISECONDS)
+        .build()
+
+    WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+        "daily_prediction_reminder",
+        ExistingPeriodicWorkPolicy.UPDATE,
+        request
+    )
 }

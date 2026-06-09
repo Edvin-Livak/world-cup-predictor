@@ -3,6 +3,14 @@
     <string name="your_name">Nimesi</string>
     <string name="pin_label">4-numeroinen PIN-koodi</string>
     <string name="login">Kirjaudu sisään</string>
+    <string name="loginerror">Käyttäjänimi on jo varattu tai PIN-koodi ei ole 4 numeroa pitkä.</string>
+    <string name="could_not_create_profile">Profiilin luominen epäonnistui. Yritä uudelleen.</string>
+    <string name="invalidlogin">Virheellinen käyttäjänimi tai PIN-koodi.</string>
+    <string name="could_not_login">Kirjautuminen epäonnistui. Yritä uudelleen.</string>
+    <string name="could_not_update_matches">Otteluiden päivitys epäonnistui:</string>
+    <string name="perfect_predictions">Täydellinen veikkaus</string>
+    <string name="checking">Hakee uusimmat tulokset</string>
+
     <string name="create_profile">Luo uusi profiili</string>
     <string name="predictions">Veikkaukset</string>
     <string name="leaderboard">Tulostaulukko</string>
@@ -30,11 +38,22 @@
     <string name="rules_group_body">• Oikea voittaja tai tasapeli: 1 piste\n• Tarkka tulos: +3 pistettä\n• Maksimi: 4 pistettä</string>
 
     <string name="rules_knockout_title">Pudotuspelit</string>
-    <string name="rules_knockout_body">• Samat säännöt, jos rangaistuspotkuja ei tule\n• Rangaistuspotkuissa: tarkka tulos = 3 pistettä\n• Veikattu tasapeli, mutta väärä tulos = 1 piste\n• Oikea voittaja rangaistuspotkuilla = +1 piste\n• Oikea voittaja ilman rangaistuspotkuveikkausta = +1 piste\n• Maksimi: 4 pistettä</string>
+    <string name="rules_knockout_body">• Samat säännöt, jos rangaistuspotkuja ei tule</string>
+    <string name="penalties">Rangaistuspotkosäännöt</string>
+    <string name="rules_penalty_1">• Rangaistuspotkuissa: tarkka tulos = 3 pistettä</string>
+    <string name="rules_penalty_2">• Veikattu tasapeli, mutta väärä tulos = 1 piste</string>
+    <string name="rules_penalty_3">• Oikea voittaja rangaistuspotkuilla = +1 piste</string>
+    <string name="rules_penalty_4">• Oikea voittaja ilman rangaistuspotkuveikkausta = 1 piste</string>
+    <string name="rules_penalty_5">• Maksimi: 4 pistettä</string>
 
     <string name="show_examples">Näytä esimerkit</string>
     <string name="scoring_examples">Piste-esimerkit</string>
     <string name="close">Sulje</string>
 
     <string name="rules_examples_body">Lohkovaiheen esimerkki:\nVeikkaus: SWE–ENG 2–2\nTulos: SWE–ENG 1–1\nPisteet: 1, oikea tasapeli\n\nVeikkaus: SWE–ENG 3–3\nTulos: SWE–ENG 3–3\nPisteet: 4, tarkka tulos\n\nPudotuspelien rangaistuspotkuesimerkki:\nTulos: MEX–IRN 1–1, Meksiko voittaa rangaistuspotkuilla\n\nVeikkaus: 1–1 + Meksiko rankkareilla = 4\nVeikkaus: 1–1 + Iran rankkareilla = 3\nVeikkaus: 2–2 + Meksiko rankkareilla = 2\nVeikkaus: 2–2 + Iran rankkareilla = 1\nVeikkaus: 3–1 = 1, oikea voittaja</string>
+
+    <string name="notification_channel_prediction_reminders">Veikkausmuistutukset</string>
+    <string name="notification_title">MM-kisaveikkaus</string>
+    <string name="notification_one_match">Sinulla on 1 ottelu veikattavana huomenna.</string>
+    <string name="notification_multiple_matches">Sinulla on %1$d ottelua veikattavana huomenna.</string>
 </resources>
