@@ -50,6 +50,7 @@
     <string name="show_examples">Visa exempel</string>
     <string name="scoring_examples">Poängexempel</string>
     <string name="close">Stäng</string>
+    <string name="awaiting_result_update">Matchen är slut — väntar på resultatuppdatering</string>
 
     <string name="rules_examples_body">Exempel gruppspel:\nTippning: SVE–ENG 2–2\nResultat: SVE–ENG 1–1\nPoäng: 1, rätt oavgjort\n\nTippning: SVE–ENG 3–3\nResultat: SVE–ENG 3–3\nPoäng: 4, exakt resultat\n\nExempel slutspel med straffar:\nResultat: MEX–IRN 1–1, Mexiko vinner på straffar\n\nTippning: 1–1 + Mexiko straffar = 4\nTippning: 1–1 + Iran straffar = 3\nTippning: 2–2 + Mexiko straffar = 2\nTippning: 2–2 + Iran straffar = 1\nTippning: 3–1 = 1, rätt vinnare</string>
 

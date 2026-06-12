@@ -50,6 +50,7 @@
     <string name="show_examples">Show examples</string>
     <string name="scoring_examples">Scoring examples</string>
     <string name="close">Close</string>
+    <string name="awaiting_result_update">Match finished — waiting for result update</string>
 
     <string name="rules_examples_body">Group stage example:\nPrediction: SWE–ENG 2–2\nActual: SWE–ENG 1–1\nPoints: 1, correct draw\n\nPrediction: SWE–ENG 3–3\nActual: SWE–ENG 3–3\nPoints: 4, exact score\n\nKnockout penalties example:\nActual: MEX–IRN 1–1, Mexico wins penalties\n\nPrediction: 1–1 + Mexico pens = 4\nPrediction: 1–1 + Iran pens = 3\nPrediction: 2–2 + Mexico pens = 2\nPrediction: 2–2 + Iran pens = 1\nPrediction: 3–1 = 1, correct winner only</string>
 

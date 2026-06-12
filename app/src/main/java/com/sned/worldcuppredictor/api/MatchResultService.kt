@@ -20,6 +20,18 @@ class MatchResultService {
                 item.homeTeam.name != null && item.awayTeam.name != null
             }
             .map { item ->
+
+                android.util.Log.d(
+                "MATCH_STATUS_TEST",
+                "${item.homeTeam.name} vs ${item.awayTeam.name} -> ${item.status}"
+            )
+
+                android.util.Log.d(
+                    "SCORE_TEST",
+                    "${item.homeTeam.name} vs ${item.awayTeam.name} " +
+                            "status=${item.status}, " +
+                            "fullTime=${item.score.fullTime.home}-${item.score.fullTime.away}, "
+                )
                 Match(
                     id = item.id,
                     group = item.group ?: item.stage ?: "World Cup",
@@ -38,6 +50,8 @@ class MatchResultService {
                     homeTla = item.homeTeam.tla,
                     awayTla = item.awayTeam.tla,
                     stage = item.stage
+
+
                 )
             }
     }

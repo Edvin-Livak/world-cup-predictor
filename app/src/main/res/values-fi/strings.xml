@@ -49,6 +49,7 @@
     <string name="show_examples">Näytä esimerkit</string>
     <string name="scoring_examples">Piste-esimerkit</string>
     <string name="close">Sulje</string>
+    <string name="awaiting_result_update">Ottelu on päättynyt — odotetaan tulospäivitystä</string>
 
     <string name="rules_examples_body">Lohkovaiheen esimerkki:\nVeikkaus: SWE–ENG 2–2\nTulos: SWE–ENG 1–1\nPisteet: 1, oikea tasapeli\n\nVeikkaus: SWE–ENG 3–3\nTulos: SWE–ENG 3–3\nPisteet: 4, tarkka tulos\n\nPudotuspelien rangaistuspotkuesimerkki:\nTulos: MEX–IRN 1–1, Meksiko voittaa rangaistuspotkuilla\n\nVeikkaus: 1–1 + Meksiko rankkareilla = 4\nVeikkaus: 1–1 + Iran rankkareilla = 3\nVeikkaus: 2–2 + Meksiko rankkareilla = 2\nVeikkaus: 2–2 + Iran rankkareilla = 1\nVeikkaus: 3–1 = 1, oikea voittaja</string>
 

@@ -248,8 +248,10 @@ fun WorldCupPredictorApp() {
                     apiKey = BuildConfig.API_FOOTBALL_KEY
                 )
 
+                val mergedMatches = mergeMatches(matches, fetchedMatches)
+
                 matches = fetchedMatches
-                storage.saveMatches(fetchedMatches)
+                storage.saveMatches(mergedMatches)
             } catch (e: Exception) {
                 android.util.Log.e("API_TEST", "Auto fetch failed", e)
                 errorMessage = "Could not load matches: ${e.message}"
@@ -375,8 +377,26 @@ fun WorldCupPredictorApp() {
                             apiKey = BuildConfig.API_FOOTBALL_KEY
                         )
 
+                        // DEBUG CODE
+                        val firstMatch = fetchedMatches.firstOrNull()
+
+                        android.util.Log.d(
+                            "PHONE_UPDATE_TEST",
+                            "Fetched ${fetchedMatches.size} matches. First=${firstMatch?.homeTeam} vs ${firstMatch?.awayTeam}, status=${firstMatch?.status}"
+                        )
+                        val mergedMatches = mergeMatches(
+                            oldMatches = matches,
+                            newMatches = fetchedMatches
+                        )
+
                         matches = fetchedMatches
-                        storage.saveMatches(fetchedMatches)
+                        storage.saveMatches(mergedMatches)
+
+
+                        android.util.Log.d(
+                            "PHONE_UPDATE_TEST",
+                            "Updated local matches. First local status=${matches.firstOrNull()?.status}"
+                        )
                         android.util.Log.d("API_TEST", "Loaded ${matches.size} matches")
                     } catch (e: Exception) {
                         android.util.Log.e("API_TEST", "API failed", e)
@@ -632,8 +652,14 @@ fun PredictionsScreen(
         .distinct()
         .sorted()
 
+    val today = java.time.LocalDate.now().toString()
+
+    val defaultSection =
+        sections.firstOrNull { it >= today }
+            ?: sections.firstOrNull()
+
     var selectedSection by remember(sections) {
-        mutableStateOf(sections.firstOrNull())
+        mutableStateOf(defaultSection)
     }
 
     val visibleMatches = matches.filter { match ->
@@ -909,6 +935,8 @@ fun MatchCard(
         homeGoalsText.toIntOrNull() != null &&
                 homeGoalsText.toIntOrNull() == awayGoalsText.toIntOrNull()
 
+    val isAwaitingResultUpdate = isProbablyFinished(match)
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         border = BorderStroke(
@@ -953,7 +981,38 @@ fun MatchCard(
             )
 
             when {
-                isLocked && match.status == MatchStatus.SCHEDULED -> {
+                match.status == MatchStatus.FINISHED &&
+                        match.actualHomeGoals != null &&
+                        match.actualAwayGoals != null -> {
+
+                    Text(
+                        stringResource(R.string.result) +
+                                " ${match.actualHomeGoals}-${match.actualAwayGoals}"
+                    )
+
+                    Text(
+                        stringResource(R.string.points) +
+                                " $points"
+                    )
+                }
+
+                match.status == MatchStatus.FINISHED -> {
+                    Text(
+                        text = stringResource(R.string.awaiting_result_update),
+                        color = MaterialTheme.colorScheme.tertiary,
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
+
+                isAwaitingResultUpdate -> {
+                    Text(
+                        text = stringResource(R.string.awaiting_result_update),
+                        color = MaterialTheme.colorScheme.tertiary,
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
+
+                isLocked -> {
                     Text(
                         text = stringResource(R.string.prediction_locked),
                         color = Color(0xFFC62828),
@@ -961,25 +1020,12 @@ fun MatchCard(
                     )
                 }
 
-                match.status == MatchStatus.SCHEDULED -> {
+                else -> {
                     Text(
                         text = stringResource(R.string.prediction_open),
                         color = Color(0xFF2E7D32),
                         style = MaterialTheme.typography.labelLarge
                     )
-                }
-
-                match.status == MatchStatus.LIVE -> {
-                    Text(
-                        text = stringResource(R.string.prediction_locked),
-                        color = Color(0xFFC62828),
-                        style = MaterialTheme.typography.labelLarge
-                    )
-                }
-
-                match.status == MatchStatus.FINISHED -> {
-                    Text(stringResource(R.string.result) + " ${match.actualHomeGoals}-${match.actualAwayGoals}")
-                    Text(stringResource(R.string.points) + " $points")
                 }
             }
 
@@ -1052,7 +1098,7 @@ fun MatchCard(
             }
 
             Spacer(modifier = Modifier.height(8.dp))
-            if (match.status != MatchStatus.SCHEDULED) {
+            if (isLocked) {
                 OutlinedButton(
                     onClick = onViewPredictions,
                     modifier = Modifier.fillMaxWidth()
@@ -1177,4 +1223,52 @@ fun scheduleDailyReminder(context: android.content.Context) {
         ExistingPeriodicWorkPolicy.UPDATE,
         request
     )
+}
+
+fun isProbablyFinished(match: Match): Boolean {
+    val kickoffInstant = try {
+        Instant.parse(match.kickoffTime)
+    } catch (e: Exception) {
+        return false
+    }
+
+    // 2 hours 15 minutes after kickoff:
+    // 90 min match + halftime + stoppage time + API delay buffer
+    val estimatedFinishTime = kickoffInstant.plus(Duration.ofMinutes(130))
+
+    return Instant.now() >= estimatedFinishTime &&
+            match.status != MatchStatus.FINISHED
+}
+
+fun mergeMatches(
+    oldMatches: List<Match>,
+    newMatches: List<Match>
+): List<Match> {
+    val oldById = oldMatches.associateBy { it.id }
+
+    return newMatches.map { new ->
+        val old = oldById[new.id] ?: return@map new
+
+        val betterStatus =
+            if (statusRank(old.status) > statusRank(new.status)) {
+                old.status
+            } else {
+                new.status
+            }
+
+        new.copy(
+            status = betterStatus,
+            actualHomeGoals = new.actualHomeGoals ?: old.actualHomeGoals,
+            actualAwayGoals = new.actualAwayGoals ?: old.actualAwayGoals,
+            penaltyWinner = new.penaltyWinner ?: old.penaltyWinner
+        )
+    }
+}
+
+fun statusRank(status: MatchStatus): Int {
+    return when (status) {
+        MatchStatus.SCHEDULED -> 0
+        MatchStatus.LIVE -> 1
+        MatchStatus.FINISHED -> 2
+    }
 }
